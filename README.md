@@ -135,7 +135,7 @@ Not supported yet:
 
 ## Testing
 
-Unit tests run offline. Tests against the live relay skip unless `TEST_PROJECT_ID` is set:
+Unit tests run offline. Tests against the live relay skip locally unless `TEST_PROJECT_ID` is set. In CI (`CI` set) they fail instead of skipping, so a missing secret cannot pass silently; CI allows skipping, with `TEST_ALLOW_SKIP_LIVE`, only for pull requests from forks and Dependabot, which get no secrets:
 
 ```sh
 TEST_PROJECT_ID=... TEST_RELAY_URL=wss://relay.walletconnect.com go test -race ./...

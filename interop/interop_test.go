@@ -69,7 +69,7 @@ func startJS(t *testing.T, role string) *jsPeer {
 	_, file, _, _ := runtime.Caller(0)
 	dir := filepath.Join(filepath.Dir(file), "js")
 	if _, err := os.Stat(filepath.Join(dir, "node_modules")); err != nil {
-		t.Skip("interop/js/node_modules missing; run npm install in interop/js")
+		testenv.SkipOrFail(t, "interop/js/node_modules is missing; run npm ci in interop/js")
 	}
 	cmd := exec.Command("node", "peer.mjs", role)
 	cmd.Dir = dir

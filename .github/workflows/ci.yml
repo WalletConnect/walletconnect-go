@@ -13,10 +13,12 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Live relay tests skip themselves when TEST_PROJECT_ID is empty, e.g. on
-  # pull requests from forks, which get no secrets.
   TEST_PROJECT_ID: ${{ secrets.TEST_PROJECT_ID }}
   TEST_RELAY_URL: wss://relay.walletconnect.com
+  # Live tests fail in CI without TEST_PROJECT_ID, so a lost secret cannot
+  # pass silently. Pull requests from forks and Dependabot get no repository
+  # secrets; only they may skip.
+  TEST_ALLOW_SKIP_LIVE: ${{ (github.event.pull_request.head.repo.fork || github.actor == 'dependabot[bot]') && '1' || '' }}
   STATICCHECK: honnef.co/go/tools/cmd/staticcheck@v0.8.2
 
 jobs:
@@ -48,6 +50,10 @@ jobs:
           go-version-file: go.mod
       - name: unit and live relay tests
         run: go test -race -count=1 ./...
+      - name: report skipped live tests
+        if: env.TEST_ALLOW_SKIP_LIVE == '1'
+        run: |
+          echo "Live relay tests were skipped: this run has no access to TEST_PROJECT_ID." >> "$GITHUB_STEP_SUMMARY"
 
   web:
     runs-on: ubuntu-latest
@@ -90,5 +96,8 @@ jobs:
         working-directory: interop/js
         run: node gen-vectors.mjs && git diff --exit-code ../../testdata/vectors.json
       - name: Go and JS SDK interop
-        if: env.TEST_PROJECT_ID != ''
         run: go test -race -count=1 -tags interop ./interop/
+      - name: report skipped interop tests
+        if: env.TEST_ALLOW_SKIP_LIVE == '1'
+        run: |
+          echo "Interop tests were skipped: this run has no access to TEST_PROJECT_ID." >> "$GITHUB_STEP_SUMMARY"
