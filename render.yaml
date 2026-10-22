@@ -1,0 +1,25 @@
+# Render Blueprint for the web demos in examples/web. The free plan sleeps
+# after 15 idle minutes and wipes the disk, so each wake starts fresh: no
+# sessions, and a new wallet key.
+services:
+  - type: web
+    name: walletconnect-go-dapp
+    runtime: go
+    plan: free
+    buildCommand: cd examples/web && go build -o ../../bin/wc-dapp ./dapp
+    startCommand: ./bin/wc-dapp -addr ":$PORT" -url "$RENDER_EXTERNAL_URL" -data /tmp/wc-dapp
+    healthCheckPath: /
+    envVars:
+      - key: WC_PROJECT_ID
+        sync: false
+
+  - type: web
+    name: walletconnect-go-wallet
+    runtime: go
+    plan: free
+    buildCommand: cd examples/web && go build -o ../../bin/wc-wallet ./wallet
+    startCommand: ./bin/wc-wallet -addr ":$PORT" -url "$RENDER_EXTERNAL_URL" -data /tmp/wc-wallet
+    healthCheckPath: /
+    envVars:
+      - key: WC_PROJECT_ID
+        sync: false

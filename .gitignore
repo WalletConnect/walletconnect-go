@@ -1,3 +1,4 @@
 interop/js/node_modules/
 *.db
 examples/web/data/
+/bin/
