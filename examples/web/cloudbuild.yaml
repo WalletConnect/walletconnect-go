@@ -1,0 +1,6 @@
+# Builds examples/web/Dockerfile on Cloud Build, from the repository root:
+#   gcloud builds submit --config examples/web/cloudbuild.yaml --substitutions _IMAGE=<image> .
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [build, -f, examples/web/Dockerfile, -t, $_IMAGE, .]
+images: [$_IMAGE]
