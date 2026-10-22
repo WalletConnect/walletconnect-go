@@ -1,0 +1,28 @@
+name: soak
+
+# Manual leak check: many full session lifecycles in one process.
+on:
+  workflow_dispatch:
+    inputs:
+      cycles:
+        description: Session lifecycles to run
+        default: "100"
+
+permissions:
+  contents: read
+
+jobs:
+  soak:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TEST_PROJECT_ID: ${{ secrets.TEST_PROJECT_ID }}
+      TEST_RELAY_URL: wss://relay.walletconnect.com
+      TEST_SOAK: ${{ inputs.cycles }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: soak
+        run: go test -race -count=1 -run TestE2ESoakNoLeaks -timeout 40m -v .

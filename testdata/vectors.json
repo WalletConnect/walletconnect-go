@@ -1,0 +1,555 @@
+{
+  "crypto": {
+    "privA": "1111111111111111111111111111111111111111111111111111111111111111",
+    "privB": "2222222222222222222222222222222222222222222222222222222222222222",
+    "pubA": "7b4e909bbe7ffe44c465a220037d608ee35897d31ef972f07f74892cb0f73f13",
+    "pubB": "0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20",
+    "symKey": "dc5774cb6f12055709d3faed4fbe6b36f192c9a610a9fa0ad748c9f89975083f",
+    "symKeyReverse": "dc5774cb6f12055709d3faed4fbe6b36f192c9a610a9fa0ad748c9f89975083f",
+    "sessionTopic": "b2bfbfd11c76cffd30bfd6c29163d24eeb5612ad7280ef7fea544d406a81f084",
+    "pairingSymKey": "3333333333333333333333333333333333333333333333333333333333333333",
+    "pairingTopic": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+    "iv": "444444444444444444444444",
+    "plaintext": "{\"id\":1760000000000123,\"jsonrpc\":\"2.0\",\"method\":\"wc_sessionPing\",\"params\":{}}",
+    "sealed": "AERERERERERERERERH8eF3g2/6+WPYILux4I9DB2sNKXxC0jVAA+9YmG5CRBERa/XtZ6ZfjR+WP0simbe3SaR8AOZWd9EPJTWgbj8Cy91g/ZETMt0iew6w4DU+NIzyGAeGi7bE1ltwgljg==",
+    "decrypted": "{\"id\":1760000000000123,\"jsonrpc\":\"2.0\",\"method\":\"wc_sessionPing\",\"params\":{}}",
+    "hashMessageInput": "hello walletconnect",
+    "hashMessage": "bd6936e31cbc3b50c7dedeb82883c9bf9473d57d193c191a1b778354044b1692"
+  },
+  "auth": {
+    "seed": "5555555555555555555555555555555555555555555555555555555555555555",
+    "publicKey": "c6822637c7d310ec57627be00ba259d253749f4aaf644470cffbe53a35f73242",
+    "clientId": "did:key:z6Mksp9sfVKVpWAi43niHLXfGQ5NdCTEoiycLmrLPehquVqK",
+    "sub": "6666666666666666666666666666666666666666666666666666666666666666",
+    "aud": "wss://relay.walletconnect.org",
+    "iat": 1760000000,
+    "ttl": 86400,
+    "jwt": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJkaWQ6a2V5Ono2TWtzcDlzZlZLVnBXQWk0M25pSExYZkdRNU5kQ1RFb2l5Y0xtckxQZWhxdVZxSyIsInN1YiI6IjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjYiLCJhdWQiOiJ3c3M6Ly9yZWxheS53YWxsZXRjb25uZWN0Lm9yZyIsImlhdCI6MTc2MDAwMDAwMCwiZXhwIjoxNzYwMDg2NDAwfQ.usoil0UmvIQbTEL88hVJQ8oo203fqS5JJSgPKVHdvvskKUG4OyX5hgc8ARsDcsdnmy1Y7nJhZF4j9A5GbTZKCw",
+    "subscriptionTopic": "b2bfbfd11c76cffd30bfd6c29163d24eeb5612ad7280ef7fea544d406a81f084",
+    "subscriptionId": "72b5508b2fd002a74a7b6c6b7cdb2073a627b16ce5ab385bb0ae905b2454f2a3"
+  },
+  "uri": {
+    "input": {
+      "protocol": "wc",
+      "version": 2,
+      "topic": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+      "symKey": "3333333333333333333333333333333333333333333333333333333333333333",
+      "relay": {
+        "protocol": "irn"
+      },
+      "expiryTimestamp": 1760000300
+    },
+    "formatted": "wc:deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a@2?expiryTimestamp=1760000300&relay-protocol=irn&symKey=3333333333333333333333333333333333333333333333333333333333333333",
+    "formattedWithMethods": "wc:deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a@2?expiryTimestamp=1760000300&methods=wc_sessionPropose%2Cwc_sessionAuthenticate&relay-protocol=irn&symKey=3333333333333333333333333333333333333333333333333333333333333333",
+    "parsed": [
+      {
+        "input": "wc:deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a@2?expiryTimestamp=1760000300&relay-protocol=irn&symKey=3333333333333333333333333333333333333333333333333333333333333333",
+        "topic": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+        "version": 2,
+        "symKey": "3333333333333333333333333333333333333333333333333333333333333333",
+        "relay": {
+          "protocol": "irn"
+        },
+        "expiryTimestamp": 1760000300,
+        "methods": []
+      },
+      {
+        "input": "wc:deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a@2?expiryTimestamp=1760000300&methods=wc_sessionPropose%2Cwc_sessionAuthenticate&relay-protocol=irn&symKey=3333333333333333333333333333333333333333333333333333333333333333",
+        "topic": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+        "version": 2,
+        "symKey": "3333333333333333333333333333333333333333333333333333333333333333",
+        "relay": {
+          "protocol": "irn"
+        },
+        "expiryTimestamp": 1760000300,
+        "methods": [
+          "wc_sessionPropose",
+          "wc_sessionAuthenticate"
+        ]
+      },
+      {
+        "input": "wc://deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a@2?expiryTimestamp=1760000300&relay-protocol=irn&symKey=3333333333333333333333333333333333333333333333333333333333333333",
+        "topic": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+        "version": 2,
+        "symKey": "3333333333333333333333333333333333333333333333333333333333333333",
+        "relay": {
+          "protocol": "irn"
+        },
+        "expiryTimestamp": 1760000300,
+        "methods": []
+      },
+      {
+        "input": "d2M6ZGViMGUzOGNlZDFlNDFkZTZmOTJlNzBlODBjNDE4ZDJkMzU2YWZhYWE5OWUyNmY1OTM5ZGJjN2QzZWY0NzcyYUAyP2V4cGlyeVRpbWVzdGFtcD0xNzYwMDAwMzAwJnJlbGF5LXByb3RvY29sPWlybiZzeW1LZXk9MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw==",
+        "topic": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+        "version": 2,
+        "symKey": "3333333333333333333333333333333333333333333333333333333333333333",
+        "relay": {
+          "protocol": "irn"
+        },
+        "expiryTimestamp": 1760000300,
+        "methods": []
+      },
+      {
+        "input": "wc:deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a@2?relay-protocol=irn&symKey=3333333333333333333333333333333333333333333333333333333333333333",
+        "topic": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+        "version": 2,
+        "symKey": "3333333333333333333333333333333333333333333333333333333333333333",
+        "relay": {
+          "protocol": "irn"
+        },
+        "expiryTimestamp": 0,
+        "methods": []
+      }
+    ]
+  },
+  "namespaces": {
+    "conforming": [
+      {
+        "name": "empty required",
+        "required": {},
+        "approved": {
+          "eip155": {
+            "accounts": [
+              "eip155:1:0xab16a96D359eC26a11e2C2b3d8f8B8942d5Bfcdb"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 0
+      },
+      {
+        "name": "exact match",
+        "required": {
+          "eip155": {
+            "chains": [
+              "eip155:1"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "approved": {
+          "eip155": {
+            "accounts": [
+              "eip155:1:0xab16a96D359eC26a11e2C2b3d8f8B8942d5Bfcdb"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 0
+      },
+      {
+        "name": "approved superset",
+        "required": {
+          "eip155": {
+            "chains": [
+              "eip155:1"
+            ],
+            "methods": [
+              "personal_sign"
+            ],
+            "events": []
+          }
+        },
+        "approved": {
+          "eip155": {
+            "accounts": [
+              "eip155:1:0xab16a96D359eC26a11e2C2b3d8f8B8942d5Bfcdb",
+              "eip155:10:0xab16a96D359eC26a11e2C2b3d8f8B8942d5Bfcdb"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 0
+      },
+      {
+        "name": "missing namespace",
+        "required": {
+          "solana": {
+            "chains": [
+              "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
+            ],
+            "methods": [
+              "solana_signMessage"
+            ],
+            "events": []
+          }
+        },
+        "approved": {
+          "eip155": {
+            "accounts": [
+              "eip155:1:0xab16a96D359eC26a11e2C2b3d8f8B8942d5Bfcdb"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 9
+      },
+      {
+        "name": "missing chain",
+        "required": {
+          "eip155": {
+            "chains": [
+              "eip155:1",
+              "eip155:137"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "approved": {
+          "eip155": {
+            "accounts": [
+              "eip155:1:0xab16a96D359eC26a11e2C2b3d8f8B8942d5Bfcdb"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 9
+      },
+      {
+        "name": "missing method",
+        "required": {
+          "eip155": {
+            "chains": [
+              "eip155:1"
+            ],
+            "methods": [
+              "eth_signTypedData_v4"
+            ],
+            "events": []
+          }
+        },
+        "approved": {
+          "eip155": {
+            "accounts": [
+              "eip155:1:0xab16a96D359eC26a11e2C2b3d8f8B8942d5Bfcdb"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 9
+      },
+      {
+        "name": "missing event",
+        "required": {
+          "eip155": {
+            "chains": [
+              "eip155:1"
+            ],
+            "methods": [],
+            "events": [
+              "message"
+            ]
+          }
+        },
+        "approved": {
+          "eip155": {
+            "accounts": [
+              "eip155:1:0xab16a96D359eC26a11e2C2b3d8f8B8942d5Bfcdb"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 9
+      },
+      {
+        "name": "inline required key",
+        "required": {
+          "eip155:1": {
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "approved": {
+          "eip155": {
+            "accounts": [
+              "eip155:1:0xab16a96D359eC26a11e2C2b3d8f8B8942d5Bfcdb"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 0
+      },
+      {
+        "name": "inline approved key matching accounts",
+        "required": {
+          "eip155:1": {
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "approved": {
+          "eip155:1": {
+            "accounts": [
+              "eip155:1:0xab16a96D359eC26a11e2C2b3d8f8B8942d5Bfcdb"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 0
+      },
+      {
+        "name": "inline approved key wrong accounts",
+        "required": {},
+        "approved": {
+          "eip155:1": {
+            "accounts": [
+              "eip155:5:0xab16a96D359eC26a11e2C2b3d8f8B8942d5Bfcdb"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 9
+      }
+    ],
+    "session": [
+      {
+        "name": "valid",
+        "namespaces": {
+          "eip155": {
+            "accounts": [
+              "eip155:1:0xab16a96D359eC26a11e2C2b3d8f8B8942d5Bfcdb"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 0
+      },
+      {
+        "name": "bad account",
+        "namespaces": {
+          "eip155": {
+            "accounts": [
+              "eip155:1"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 5103
+      },
+      {
+        "name": "empty account address",
+        "namespaces": {
+          "eip155": {
+            "accounts": [
+              "eip155:1:"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 5103
+      },
+      {
+        "name": "empty methods ok",
+        "namespaces": {
+          "eip155": {
+            "accounts": [
+              "eip155:1:0xab16a96D359eC26a11e2C2b3d8f8B8942d5Bfcdb"
+            ],
+            "methods": [],
+            "events": []
+          }
+        },
+        "errorCode": 0
+      },
+      {
+        "name": "empty object",
+        "namespaces": {},
+        "errorCode": 5
+      }
+    ],
+    "proposal": [
+      {
+        "name": "valid chains array",
+        "namespaces": {
+          "eip155": {
+            "chains": [
+              "eip155:1"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 0
+      },
+      {
+        "name": "valid inline key",
+        "namespaces": {
+          "eip155:1": {
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 0
+      },
+      {
+        "name": "no chains",
+        "namespaces": {
+          "eip155": {
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 5100
+      },
+      {
+        "name": "bad chain",
+        "namespaces": {
+          "eip155": {
+            "chains": [
+              "eip155"
+            ],
+            "methods": [
+              "eth_sendTransaction",
+              "personal_sign"
+            ],
+            "events": [
+              "chainChanged",
+              "accountsChanged"
+            ]
+          }
+        },
+        "errorCode": 5100
+      },
+      {
+        "name": "empty object",
+        "namespaces": {},
+        "errorCode": 5
+      }
+    ]
+  }
+}

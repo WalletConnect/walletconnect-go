@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Go Wallet · WalletConnect</title>
+  <link rel="icon" href="/assets/logomark.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap">
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="/assets/logomark.svg" alt="WalletConnect">
+      <span class="name">Go Wallet</span>
+      <span class="tag">walletconnect-go demo</span>
+    </div>
+    <span class="spacer"></span>
+    <button id="waiting" class="primary" hidden></button>
+    <span id="account"></span>
+    <span id="relay" class="badge"><span class="dot"></span>Relay idle</span>
+  </header>
+
+  <div class="layout">
+    <main class="col">
+      <div class="hero">
+        <h1>Wallet</h1>
+        <p>A wallet running the WalletConnect Go SDK on its server, holding one test EVM account. It signs messages and typed data. Never send funds to its address.</p>
+      </div>
+
+      <section class="card">
+        <div class="card-head"><h2>Connect to a dApp</h2></div>
+        <div class="row" style="flex-wrap:nowrap">
+          <input type="text" id="uri" placeholder="Paste a wc: link" aria-label="Pairing URI">
+          <button id="paste" title="Paste from clipboard">Paste</button>
+          <button id="pair" class="primary">Connect</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Sessions</h2><span class="count" data-count-for="sessions">0</span></div>
+        <div id="sessions"></div>
+      </section>
+    </main>
+
+    <aside>
+      <section class="card log-card">
+        <div class="card-head"><h2>Event log</h2><span class="spacer"></span><button class="ghost" id="clear-log">Clear</button></div>
+        <div id="log"></div>
+      </section>
+    </aside>
+  </div>
+  <dialog id="modal" class="modal" aria-label="Pending request"></dialog>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

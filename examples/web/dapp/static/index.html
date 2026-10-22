@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Go dApp · WalletConnect</title>
+  <link rel="icon" href="/assets/logomark.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap">
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="/assets/logomark.svg" alt="WalletConnect">
+      <span class="name">Go dApp</span>
+      <span class="tag">walletconnect-go demo</span>
+    </div>
+    <span class="spacer"></span>
+    <span id="client"></span>
+    <span id="relay" class="badge"><span class="dot"></span>Relay idle</span>
+  </header>
+
+  <div class="layout">
+    <main class="col">
+      <div class="hero">
+        <h1>Connect a wallet</h1>
+        <p>A dApp running the WalletConnect Go SDK on its server. Scan the code with any wallet, or paste the link into the Go demo wallet, then ask it to sign.</p>
+      </div>
+
+      <section class="card">
+        <div class="card-head"><h2>New connection</h2></div>
+        <div class="stack">
+          <div>
+            <div class="eyebrow">Networks</div>
+            <div class="row" id="chains"></div>
+          </div>
+          <div>
+            <div class="eyebrow">Methods</div>
+            <div class="row" id="methods"></div>
+          </div>
+          <div class="row" id="connect-row"></div>
+        </div>
+        <div id="pairing"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Sessions</h2><span class="count" data-count-for="sessions">0</span></div>
+        <div id="sessions"></div>
+      </section>
+    </main>
+
+    <aside>
+      <section class="card log-card">
+        <div class="card-head"><h2>Event log</h2><span class="spacer"></span><button class="ghost" id="clear-log">Clear</button></div>
+        <div id="log"></div>
+      </section>
+    </aside>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

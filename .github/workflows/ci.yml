@@ -1,0 +1,94 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Live relay tests skip themselves when TEST_PROJECT_ID is empty, e.g. on
+  # pull requests from forks, which get no secrets.
+  TEST_PROJECT_ID: ${{ secrets.TEST_PROJECT_ID }}
+  TEST_RELAY_URL: wss://relay.walletconnect.com
+  STATICCHECK: honnef.co/go/tools/cmd/staticcheck@v0.8.2
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "$unformatted"; exit 1; fi
+      - name: go.mod is tidy
+        run: go mod tidy && git diff --exit-code go.mod go.sum
+      - run: go vet ./...
+      - run: go vet -tags interop ./interop/
+      - run: go run $STATICCHECK ./...
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: unit and live relay tests
+        run: go test -race -count=1 ./...
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: examples/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: examples/web/go.mod
+          cache-dependency-path: examples/web/go.sum
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "$unformatted"; exit 1; fi
+      - name: go.mod is tidy
+        run: go mod tidy && git diff --exit-code go.mod go.sum
+      - run: go vet ./...
+      - run: go test ./...
+      - run: go build ./...
+
+  interop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: interop/js/package-lock.json
+      - run: npm ci
+        working-directory: interop/js
+      - name: golden vectors match the JS SDK
+        working-directory: interop/js
+        run: node gen-vectors.mjs && git diff --exit-code ../../testdata/vectors.json
+      - name: Go and JS SDK interop
+        if: env.TEST_PROJECT_ID != ''
+        run: go test -race -count=1 -tags interop ./interop/

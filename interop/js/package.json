@@ -1,0 +1,12 @@
+{
+  "name": "walletconnect-go-interop",
+  "private": true,
+  "type": "module",
+  "description": "JS side of the Go SDK interop tests and golden vectors",
+  "dependencies": {
+    "@walletconnect/sign-client": "2.26.0",
+    "@walletconnect/utils": "2.26.0",
+    "@walletconnect/relay-auth": "1.1.0",
+    "@noble/curves": "1.9.7"
+  }
+}
