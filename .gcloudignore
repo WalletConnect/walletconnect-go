@@ -1,0 +1,4 @@
+.git
+.github
+interop/js/node_modules/
+#!include:.gitignore

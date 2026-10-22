@@ -22,13 +22,17 @@ func main() {
 	dataDir := flag.String("data", "data/dapp", "directory for the session store")
 	relayURL := flag.String("relay", wc.DefaultRelayURL, "relay URL")
 	debug := flag.Bool("debug", false, "trace every action and relay message from start to finish")
+	publicURL := flag.String("url", "", "public URL sent to peers in the metadata (default http://localhost<addr>)")
 	flag.Parse()
+	if *publicURL == "" {
+		*publicURL = "http://localhost" + *addr
+	}
 
 	app, closeApp, err := server.Start(server.Config{
 		Name: "dapp", DataDir: *dataDir, RelayURL: *relayURL, Debug: *debug,
 		Metadata: wc.Metadata{
 			Name: "Go demo dApp", Description: "walletconnect-go web demo",
-			URL: "http://localhost" + *addr, Icons: []string{"https://avatars.githubusercontent.com/u/37784886"},
+			URL: *publicURL, Icons: []string{"https://avatars.githubusercontent.com/u/37784886"},
 		},
 	})
 	if err != nil {
