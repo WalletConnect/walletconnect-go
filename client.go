@@ -12,7 +12,9 @@ import (
 	"crypto/ed25519"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,6 +25,7 @@ import (
 	"github.com/WalletConnect/walletconnect-go/internal/store"
 	"github.com/WalletConnect/walletconnect-go/internal/trace"
 	"github.com/WalletConnect/walletconnect-go/storage"
+	"github.com/WalletConnect/walletconnect-go/tracefile"
 	"go.opentelemetry.io/otel/metric"
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
@@ -57,14 +60,26 @@ type Options struct {
 	// not need the log lines, and the log lines do not need them.
 	TracerProvider oteltrace.TracerProvider
 	MeterProvider  metric.MeterProvider
+	// TraceFile is where every span is written, one per line in OTLP JSON,
+	// rotated by size. With a bbolt Storage it defaults to a .trace.jsonl
+	// file beside the database; with other storage it is off unless set.
+	// The file needs no OpenTelemetry setup; see the tracefile package to
+	// read or summarize it. An explicit path that cannot be opened fails New.
+	TraceFile string
+	// NoTraceFile turns the trace file off.
+	NoTraceFile bool
+	// TraceFileLimit is the most bytes the trace file and its two rotated
+	// predecessors keep on disk; default 30 MB.
+	TraceFileLimit int64
 
 	now func() time.Time // test hook for the protocol clock
 }
 
 type Client struct {
-	tracer *trace.Tracer
-	engine *engine.Engine
-	relay  *relay.Client
+	tracer    *trace.Tracer
+	traceFile *tracefile.Writer // nil when off
+	engine    *engine.Engine
+	relay     *relay.Client
 	// Stopped in this order by Close, so acks for processed messages and
 	// queued answers reach the relay before the socket closes.
 	stopEngine, stopRelay, stopDispatch context.CancelFunc
@@ -95,12 +110,20 @@ func New(ctx context.Context, opts Options) (*Client, error) {
 		return topics, err
 	}
 
-	tracer := trace.New(trace.Options{Logger: opts.Logger, LogLines: opts.Trace,
+	traceFile, err := openTraceFile(opts)
+	if err != nil {
+		return nil, err
+	}
+	var exporter trace.Exporter
+	if traceFile != nil {
+		exporter = traceFile
+	}
+	tracer := trace.New(trace.Options{Logger: opts.Logger, LogLines: opts.Trace, Exporter: exporter,
 		TracerProvider: opts.TracerProvider, MeterProvider: opts.MeterProvider, Version: Version})
 	engineCtx, stopEngine := context.WithCancel(context.Background())
 	relayCtx, stopRelay := context.WithCancel(context.Background())
 	dispatchCtx, stopDispatch := context.WithCancel(context.Background())
-	c := &Client{tracer: tracer, stopEngine: stopEngine, stopRelay: stopRelay, stopDispatch: stopDispatch,
+	c := &Client{tracer: tracer, traceFile: traceFile, stopEngine: stopEngine, stopRelay: stopRelay, stopDispatch: stopDispatch,
 		events: make(chan Event, opts.EventBuffer), queue: queue.New[Event]()}
 	c.engine = engine.New(engine.Config{Store: st, Metadata: opts.Metadata, Logger: opts.Logger, Emit: c.queue.Push, Now: opts.now, Tracer: tracer})
 	c.relay = relay.New(relay.Config{
@@ -128,6 +151,39 @@ func New(ctx context.Context, opts Options) (*Client, error) {
 		c.relay.Connect()
 	}
 	return c, nil
+}
+
+// openTraceFile opens the trace file Options ask for: the given path, or
+// one beside a file-backed storage. A default path that cannot be opened
+// only logs a warning, so a read-only data directory does not stop the
+// client.
+func openTraceFile(o Options) (*tracefile.Writer, error) {
+	if o.NoTraceFile {
+		return nil, nil
+	}
+	path, explicit := o.TraceFile, o.TraceFile != ""
+	if !explicit {
+		p, ok := o.Storage.(interface{ Path() string })
+		if !ok || p.Path() == "" {
+			return nil, nil
+		}
+		path = traceFilePath(p.Path())
+	}
+	w, err := tracefile.Open(path, tracefile.Options{Limit: o.TraceFileLimit, Service: o.Metadata.Name, Version: Version})
+	if err != nil {
+		if explicit {
+			return nil, fmt.Errorf("open trace file: %w", err)
+		}
+		o.Logger.Warn("trace file is off: cannot open it", "path", path, "err", err)
+		return nil, nil
+	}
+	return w, nil
+}
+
+// traceFilePath puts the trace file beside the database, with its name:
+// wallet.db becomes wallet.trace.jsonl.
+func traceFilePath(db string) string {
+	return strings.TrimSuffix(db, filepath.Ext(db)) + ".trace.jsonl"
 }
 
 func (o Options) withDefaults() (Options, error) {
@@ -182,6 +238,9 @@ func (c *Client) Close() error {
 		c.stopDispatch()
 		c.wg.Wait()
 		close(c.events)
+		if c.traceFile != nil {
+			c.traceFile.Close()
+		}
 	})
 	return nil
 }

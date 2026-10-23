@@ -108,9 +108,48 @@ trace=8bf5ecff action=incoming step=done              elapsed=4.9ms    acked=tru
 
 The relay confirms a publish only after the receiver acks it, so the `took` of an `irn_publish` reply shows how long the peer took to receive the message. That makes tracing the first place to look when a request seems stuck.
 
+## Trace file
+
+With a bbolt storage the client also writes every span to a file beside the database, so `wallet.db` gets `wallet.trace.jsonl`, with nothing to configure and no OpenTelemetry setup in the application. Each line is one span in OTLP JSON: the file reads with `jq`, and a collector replays it into Grafana, Jaeger or Tempo. Spans are written as they end, one write call each, so a crash loses nothing already written. The file rotates by size: when it reaches a third of `Options.TraceFileLimit` (default 30 MB) it becomes `.1`, the previous `.1` becomes `.2`, and the previous `.2` is removed.
+
+`Options.TraceFile` names the file instead, with any storage; `Options.NoTraceFile` turns it off. A default path that cannot be opened logs a warning and leaves the file off, and an explicit one that cannot be opened fails `New`. A failing write is logged once and never fails the client.
+
+`wctrace summary` adds up a file and its rotated predecessors: how many spans of each name, how they ended, and their p50, p95 and max, with requests broken down by method. From the example dApp after one proposal that no wallet answered:
+
+```text
+$ go run github.com/WalletConnect/walletconnect-go/cmd/wctrace summary dapp.trace.jsonl
+6 spans from 2026-10-23T09:37:35Z to 2026-10-23T09:37:41Z
+
+  span                      count  ok  failed    p50    p95    max  outcomes
+  relay.batch_subscribe         1   1       0   87ms   87ms   87ms  ok 1
+  relay.connect                 1   1       0  182ms  182ms  182ms
+  relay.connected               1   1       0   15µs   15µs   15µs
+  relay.wc_propose_session      1   1       0   77ms   77ms   77ms  ok 1
+  walletconnect.connect         1   1       0  269ms  269ms  269ms
+  wc.peer.answer                1   0       1  5.95s  5.95s  5.95s  cancelled 1
+    wc_sessionPropose           1   0       1  5.95s  5.95s  5.95s  cancelled 1
+```
+
+The same summary is available in code from `tracefile.Summarize`, and `tracefile.Read` yields the spans for anything else. To see a file in a tracing UI, point a collector's `otlpjsonfile` receiver at it:
+
+```yaml
+receivers:
+  otlpjsonfile:
+    include: [/data/wallet.trace.jsonl*]
+    start_at: beginning
+exporters:
+  otlp:
+    endpoint: tempo:4317
+service:
+  pipelines:
+    traces: {receivers: [otlpjsonfile], exporters: [otlp]}
+```
+
+The file carries what the trace lines carry: topics, relay ids, payload ids, methods, chain ids, counts, timings and error text. It never holds a pairing URI, a key, an account or a message, so it can be attached to a bug report as it is.
+
 ## OpenTelemetry
 
-Set `Options.TracerProvider` and `Options.MeterProvider` to get the same actions as spans and latencies as metrics, in whatever backend your application exports to. Both are off when nil, and they are independent of `Options.Trace`: the log lines need no provider, and the providers need no log lines. When both are on, the log trace ID is the first eight characters of the OpenTelemetry trace ID, so a log line and a span name the same thing.
+Set `Options.TracerProvider` and `Options.MeterProvider` to get the same actions as spans and latencies as metrics, in whatever backend your application exports to. Both are off when nil, and they are independent of `Options.Trace`: the log lines need no provider, and the providers need no log lines. When both are on, the log trace ID is the first eight characters of the OpenTelemetry trace ID, so a log line and a span name the same thing. The trace file uses the same ids as well, so a span in the file, in the log and in a backend is one span.
 
 ```go
 client, err := walletconnect.New(ctx, walletconnect.Options{
@@ -213,9 +252,11 @@ TEST_PROJECT_ID=... go run ./interop/bench -n 30
 | `client.go`, `dapp.go`, `wallet.go`, `session.go` | Public API: lifecycle, dApp, wallet and shared session calls |
 | `events.go`, `types.go`, `errors.go` | Public events, types and errors |
 | `storage/` | `KV` interface, memory and bbolt backends |
+| `tracefile/`, `cmd/wctrace` | Trace file format, writer, reader and summary; the `wctrace` command |
 | `internal/engine` | Sign protocol. `dapp.go`, `wallet_*.go` and `session.go` send; `handle*.go` receive; `expiry.go` sweeps; `waiters.go`, `requests.go` and `publish.go` are the plumbing |
 | `internal/relay` | Relay transport. `client.go` is the API, `runner.go` the state machine, `connection.go` the socket, `calls.go` request tracking, `frames.go` frame parsing |
 | `internal/store` | Typed records over `storage.KV`, one file per record kind |
+| `internal/trace` | Trace lines, the span exporter and OpenTelemetry spans and metrics behind one API |
 | `internal/namespaces` | CAIP-2/10 parsing, namespace validation and conformance |
 | `internal/crypto`, `relayauth`, `uri`, `jsonrpc`, `sdkerr`, `queue` | Protocol building blocks |
 | `interop/` | JS interop tests and vector generator |

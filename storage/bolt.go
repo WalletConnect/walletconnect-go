@@ -31,6 +31,9 @@ func OpenBolt(path string) (*Bolt, error) {
 
 func (b *Bolt) Close() error { return b.db.Close() }
 
+// Path is the database file. The client puts its trace file beside it.
+func (b *Bolt) Path() string { return b.db.Path() }
+
 func (b *Bolt) View(ctx context.Context, fn func(Tx) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
