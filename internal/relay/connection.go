@@ -85,9 +85,8 @@ func (r *runner) connecting(ctx context.Context) state {
 		for _, t := range topics {
 			r.subs[t] = true
 		}
-		sub := &call{ctx: context.Background(), op: opBatchSubscribe, method: "irn_batchSubscribe",
-			params: map[string]any{"topics": topics}, topics: topics}
-		r.unsent = append([]*call{sub}, r.unsent...)
+		// One irn_batchSubscribe per batchSubscribeLimit topics; the relay rejects larger batches.
+		r.unsent = append(batchSubscribeCalls(context.Background(), topics), r.unsent...)
 	}
 	r.c.cfg.Tracer.Event("relay connected", "socket", r.gen, "resubscribe", len(topics))
 	r.notify(true, nil)
