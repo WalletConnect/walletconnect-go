@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/WalletConnect/walletconnect-go/internal/jsonrpc"
@@ -37,8 +38,27 @@ type call struct {
 
 	id        int64
 	frame     []byte
-	firstSent time.Time // first write, on any connection
-	sentAt    time.Time // latest write
+	firstSent time.Time   // first write, on any connection
+	sentAt    time.Time   // latest write
+	span      *trace.Span // OpenTelemetry span from first write to reply
+}
+
+// spanName is the OpenTelemetry span name for a call: relay.publish,
+// relay.subscribe, relay.batch_subscribe, ...
+func (cl *call) spanName() string {
+	m := strings.TrimPrefix(cl.method, "irn_")
+	var b strings.Builder
+	b.WriteString("relay.")
+	for i, r := range m {
+		if r >= 'A' && r <= 'Z' {
+			if i > 0 {
+				b.WriteByte('_')
+			}
+			r += 'a' - 'A'
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 type ack struct {
@@ -78,12 +98,15 @@ func (r *runner) send(ctx context.Context, cl *call) bool {
 		return false
 	}
 	cl.sentAt = time.Now()
+	attrs := append([]any{"method", cl.method, "relayId", cl.id, "socket", r.gen}, describeParams(cl.params)...)
 	if cl.firstSent.IsZero() {
 		cl.firstSent = cl.sentAt
+		cl.span, _ = r.c.cfg.Tracer.Child(cl.ctx, cl.spanName(), attrs...)
+	} else {
+		cl.span.Step("resent", "socket", r.gen)
 	}
 	r.pending[cl.id] = cl
-	trace.From(cl.ctx).Step("relay send", append([]any{"method", cl.method, "relayId", cl.id, "socket", r.gen},
-		describeParams(cl.params)...)...)
+	trace.From(cl.ctx).Step("relay send", attrs...)
 	return true
 }
 
@@ -118,6 +141,7 @@ func (r *runner) checkTimeouts() (probe bool) {
 		case now.Sub(cl.firstSent) >= overall:
 			delete(r.pending, id)
 			trace.From(cl.ctx).Step("relay timeout", "method", cl.method, "relayId", cl.id)
+			r.c.cfg.Tracer.Timeout(cl.ctx, cl.method)
 			r.finish(cl, nil, types.ErrTimeout)
 		case now.Sub(cl.sentAt) >= r.c.cfg.RequestTimeout && r.lastRead.Before(cl.sentAt):
 			probe = true
@@ -142,6 +166,21 @@ func (r *runner) requeue() {
 }
 
 func (r *runner) finish(cl *call, raw json.RawMessage, err error) {
+	if !cl.firstSent.IsZero() {
+		outcome := "ok"
+		switch {
+		case err == nil:
+		case errors.Is(err, types.ErrTimeout):
+			outcome = "timeout"
+		case errors.Is(err, types.ErrClosed):
+			outcome = "closed"
+		default:
+			outcome = "error"
+		}
+		cl.span.End(err, "outcome", outcome)
+		cl.span = nil
+		r.c.cfg.Tracer.RecordRelayCall(cl.ctx, time.Since(cl.firstSent), cl.method, outcome)
+	}
 	if cl.reply != nil {
 		cl.reply <- result{raw: raw, err: err}
 		return

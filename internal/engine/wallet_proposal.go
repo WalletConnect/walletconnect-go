@@ -166,7 +166,7 @@ func (e *Engine) Approve(ctx context.Context, p ApproveParams) (*Approval, error
 	if err != nil {
 		return nil, err
 	}
-	settle := sentRequest{id: settleID, reply: e.addWaiter(ctx, settleID, session.Topic), span: trace.From(ctx)}
+	settle := sentRequest{id: settleID, reply: e.addWaiter(ctx, settleID, session.Topic, methodSettle, ""), span: trace.From(ctx)}
 	if _, err := e.relay.Request(ctx, "wc_approveSession", map[string]any{
 		"pairingTopic": prop.PairingTopic, "sessionTopic": session.Topic,
 		"sessionProposalResponse": responseMsg, "sessionSettlementRequest": settleMsg, "ttl": fiveMinutes,

@@ -33,9 +33,13 @@ func (e *Engine) sendRequest(ctx context.Context, s *store.SessionRecord, method
 	if err != nil {
 		return sentRequest{}, err
 	}
-	reply := e.addWaiter(ctx, id, s.Topic)
+	inner := ""
+	if rp, ok := params.(requestParams); ok {
+		inner = rp.Request.Method
+	}
+	reply := e.addWaiter(ctx, id, s.Topic, method, inner)
 	if err := e.publish(ctx, s.Topic, s.SymKey, payload, o); err != nil {
-		e.removeWaiter(id)
+		e.settle(e.removeWaiter(id), err, "publish_failed")
 		return sentRequest{}, err
 	}
 	trace.From(ctx).Step("request published", "id", id, "method", method)

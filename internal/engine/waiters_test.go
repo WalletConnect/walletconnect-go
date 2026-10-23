@@ -12,7 +12,7 @@ import (
 
 func (h *harness) sent(topic string) sentRequest {
 	id := jsonrpc.PayloadID()
-	return sentRequest{id: id, reply: h.e.addWaiter(h.ctx(), id, topic)}
+	return sentRequest{id: id, reply: h.e.addWaiter(h.ctx(), id, topic, "wc_sessionRequest", "")}
 }
 
 func TestAwaitGivesUp(t *testing.T) {

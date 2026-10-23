@@ -149,7 +149,7 @@ func TestOnProposeResponseStoresPendingSession(t *testing.T) {
 func TestOnProposeResponseErrorFailsConnection(t *testing.T) {
 	h := newHarness(t)
 	pairingTopic, symHex, id, _ := h.seedDAppProposal()
-	ch := h.e.addWaiter(h.ctx(), id, pairingTopic)
+	ch := h.e.addWaiter(h.ctx(), id, pairingTopic, "wc_sessionRequest", "")
 	h.deliver(pairingTopic, symHex, rpcError(id, 5000))
 
 	if r := received(t, ch); r.rpcErr == nil || r.rpcErr.Code != 5000 {
@@ -201,7 +201,7 @@ func (h *harness) settleParams() settleParams {
 func TestOnSettleCompletesConnection(t *testing.T) {
 	h := newHarness(t)
 	sessionTopic, symHex, pairingTopic, proposalID := h.seedPending()
-	ch := h.e.addWaiter(h.ctx(), proposalID, pairingTopic)
+	ch := h.e.addWaiter(h.ctx(), proposalID, pairingTopic, "wc_sessionRequest", "")
 	id := jsonrpc.PayloadID()
 	h.deliver(sessionTopic, symHex, request(id, methodSettle, h.settleParams()))
 
@@ -280,7 +280,7 @@ func (h *harness) seedUnacknowledged() (topic, symHex string, settleID int64, ch
 		_, err = tx.InsertHistory(store.History{ID: settleID, Topic: topic, Method: methodSettle, Direction: store.DirectionOut})
 		return err
 	})
-	return topic, symHex, settleID, h.e.addWaiter(h.ctx(), settleID, topic)
+	return topic, symHex, settleID, h.e.addWaiter(h.ctx(), settleID, topic, "wc_sessionRequest", "")
 }
 
 func TestOnSettleResponseAcknowledgesSession(t *testing.T) {

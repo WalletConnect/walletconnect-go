@@ -43,10 +43,14 @@ func (r *runner) connecting(ctx context.Context) state {
 		r.c.log.Error("build relay url", "err", err)
 		return stBackoff
 	}
+	span, sctx := r.c.cfg.Tracer.Child(ctx, "relay.connect", "attempt", r.attempt, "socket", r.gen+1)
+	dialStart := time.Now()
 	dialCtx, cancel := context.WithTimeout(ctx, r.c.cfg.DialTimeout)
 	conn, resp, err := websocket.Dial(dialCtx, u, nil)
 	cancel()
 	if err != nil {
+		span.End(err)
+		r.c.cfg.Tracer.RecordConnect(sctx, time.Since(dialStart), false)
 		if ctx.Err() != nil {
 			return stStopped
 		}
@@ -60,6 +64,9 @@ func (r *runner) connecting(ctx context.Context) state {
 		r.notify(false, err)
 		return stBackoff
 	}
+	span.End(nil)
+	r.c.cfg.Tracer.RecordConnect(sctx, time.Since(dialStart), true)
+	r.c.cfg.Tracer.Connected(sctx, 1)
 	conn.SetReadLimit(maxMessageSize)
 
 	r.gen++
@@ -103,7 +110,7 @@ func (r *runner) connected(ctx context.Context) state {
 		cl := r.unsent[0]
 		r.unsent = r.unsent[1:]
 		if !r.send(io, cl) {
-			return r.reconnect(nil)
+			return r.reconnect(nil, "send_failed")
 		}
 	}
 	ticker := time.NewTicker(time.Second)
@@ -115,7 +122,7 @@ func (r *runner) connected(ctx context.Context) state {
 		select {
 		case cl := <-r.c.prio:
 			if !r.send(io, cl) {
-				return r.reconnect(nil)
+				return r.reconnect(nil, "send_failed")
 			}
 			continue
 		default:
@@ -123,11 +130,11 @@ func (r *runner) connected(ctx context.Context) state {
 		select {
 		case cl := <-r.c.prio:
 			if !r.send(io, cl) {
-				return r.reconnect(nil)
+				return r.reconnect(nil, "send_failed")
 			}
 		case cl := <-r.c.reqs:
 			if !r.send(io, cl) {
-				return r.reconnect(nil)
+				return r.reconnect(nil, "send_failed")
 			}
 		case f := <-r.frames:
 			if f.gen != r.gen {
@@ -145,7 +152,7 @@ func (r *runner) connected(ctx context.Context) state {
 				}
 				r.c.log.Warn("relay connection lost", "err", f.err)
 				r.c.cfg.Tracer.Event("relay connection lost", "socket", r.gen, "err", f.err)
-				return r.reconnect(f.err)
+				return r.reconnect(f.err, "connection_lost")
 			}
 			r.handleFrame(io, f.data)
 		case a := <-r.c.acks:
@@ -167,14 +174,14 @@ func (r *runner) connected(ctx context.Context) state {
 			r.probing = false
 			if p.err != nil {
 				r.c.cfg.Tracer.Event("relay ping failed, reconnecting", "socket", r.gen, "err", p.err)
-				return r.reconnect(errors.New("relay ping failed"))
+				return r.reconnect(errors.New("relay ping failed"), "ping_failed")
 			}
 			r.lastRead = time.Now()
 		case <-r.c.nudge:
 		case <-r.c.drop:
 			r.c.log.Debug("reconnect requested")
 			r.c.cfg.Tracer.Event("relay reconnect requested", "socket", r.gen)
-			r.reconnect(nil)
+			r.reconnect(nil, "requested")
 			return stConnecting
 		case <-ctx.Done():
 			r.drain()
@@ -230,4 +237,5 @@ func (r *runner) closeConn() {
 	r.cancelConn()
 	r.conn.CloseNow()
 	r.conn = nil
+	r.c.cfg.Tracer.Connected(context.Background(), -1)
 }

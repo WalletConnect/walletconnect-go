@@ -65,8 +65,8 @@ func (r *runner) handleDelivery(ctx context.Context, f relayFrame) {
 		r.c.log.Warn("malformed subscription", "err", err)
 		return
 	}
-	span := r.c.cfg.Tracer.Start("incoming", "relayId", string(f.ID), "socket", r.gen, "topic", p.Data.Topic,
-		"tag", p.Data.Tag, "publishedAt", publishedAt(p.Data.PublishedAt))
+	span, _ := r.c.cfg.Tracer.StartIncoming(context.Background(), "incoming", "relayId", string(f.ID), "socket", r.gen,
+		"topic", p.Data.Topic, "tag", p.Data.Tag, "publishedAt", publishedAt(p.Data.PublishedAt))
 	r.c.cfg.Deliver(Incoming{ID: f.ID, Gen: r.gen, Span: span, Topic: p.Data.Topic, Message: p.Data.Message,
 		Tag: p.Data.Tag, PublishedAt: p.Data.PublishedAt})
 }
@@ -86,6 +86,7 @@ func (r *runner) handleResponse(f relayFrame) {
 		reply = append(reply, "relayError", f.Error.Message)
 	}
 	trace.From(cl.ctx).Step("relay reply", reply...)
+	cl.span.Step("reply", reply[4:]...)
 	if f.Error != nil {
 		r.subscribeFailed(cl)
 		r.finish(cl, nil, f.Error)
