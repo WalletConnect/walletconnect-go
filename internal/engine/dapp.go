@@ -94,7 +94,7 @@ func (e *Engine) Connect(ctx context.Context, p ConnectParams) (*Connection, err
 
 	sent := sentRequest{id: proposal.ID, reply: e.addWaiter(ctx, proposal.ID, pairingTopic, methodPropose, ""), span: trace.From(ctx)}
 	if err := e.sendProposal(ctx, pairingTopic, symHex, payload); err != nil {
-		e.removeWaiter(proposal.ID)
+		e.settle(e.removeWaiter(proposal.ID), err, "publish_failed")
 		_ = e.store.Update(context.Background(), func(tx *store.Tx) error { return tx.ForgetPairing(pairingTopic, proposal.ID) })
 		e.unsubscribe(ctx, pairingTopic)
 		return nil, err

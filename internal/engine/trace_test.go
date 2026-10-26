@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -101,18 +102,7 @@ func TestRequestTracing(t *testing.T) {
 		t.Fatalf("incoming attributes %v", i.Attributes)
 	}
 
-	var rm metricdata.ResourceMetrics
-	if err := reader.Collect(context.Background(), &rm); err != nil {
-		t.Fatal(err)
-	}
-	got := map[string]metricdata.Histogram[float64]{}
-	for _, sm := range rm.ScopeMetrics {
-		for _, m := range sm.Metrics {
-			if hist, ok := m.Data.(metricdata.Histogram[float64]); ok {
-				got[m.Name] = hist
-			}
-		}
-	}
+	got := histograms(t, reader)
 	req := got["walletconnect.request.duration"]
 	if len(req.DataPoints) != 1 || req.DataPoints[0].Count != 1 {
 		t.Fatalf("request.duration points %+v", req.DataPoints)
@@ -129,6 +119,123 @@ func TestRequestTracing(t *testing.T) {
 	}
 	if v, _ := inc.DataPoints[0].Attributes.Value(trace.AttrKind); v.AsString() != "response" {
 		t.Fatalf("incoming.duration attributes %v", inc.DataPoints[0].Attributes)
+	}
+}
+
+// otelSinks points the harness's tracer at an in-memory span exporter and a
+// manual metric reader.
+func otelSinks(t *testing.T, h *harness) (*tracetest.InMemoryExporter, *sdkmetric.ManualReader) {
+	t.Helper()
+	exp := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exp), sdktrace.WithSampler(sdktrace.AlwaysSample()))
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()); _ = mp.Shutdown(context.Background()) })
+	h.e.tr = trace.New(trace.Options{TracerProvider: tp, MeterProvider: mp})
+	return exp, reader
+}
+
+// histograms collects the reader's float histograms by name.
+func histograms(t *testing.T, reader *sdkmetric.ManualReader) map[string]metricdata.Histogram[float64] {
+	t.Helper()
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]metricdata.Histogram[float64]{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if hist, ok := m.Data.(metricdata.Histogram[float64]); ok {
+				got[m.Name] = hist
+			}
+		}
+	}
+	return got
+}
+
+func pointAttr(p metricdata.HistogramDataPoint[float64], key string) string {
+	v, _ := p.Attributes.Value(attribute.Key(key))
+	return v.AsString()
+}
+
+// The incoming latency metric does not depend on a span. With a meter
+// provider alone the span is nil, and the duration counts from the time the
+// relay read the frame.
+func TestIncomingLatencyWithoutSpans(t *testing.T) {
+	h := newHarness(t)
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	t.Cleanup(func() { _ = mp.Shutdown(context.Background()) })
+	h.e.tr = trace.New(trace.Options{MeterProvider: mp})
+
+	in := relayIncoming("unknown-topic", "not for us")
+	in.Received = time.Now().Add(-50 * time.Millisecond)
+	if in.Span != nil {
+		t.Fatal("no span expected with a meter provider alone")
+	}
+	if !h.e.handle(context.Background(), in) {
+		t.Fatal("a message on an unknown topic is dropped and acked")
+	}
+	hist := histograms(t, reader)["walletconnect.incoming.duration"]
+	if len(hist.DataPoints) != 1 {
+		t.Fatalf("incoming.duration points %+v, want one", hist.DataPoints)
+	}
+	if p := hist.DataPoints[0]; p.Sum < 0.05 || pointAttr(p, trace.AttrOutcome) != "dropped" {
+		t.Fatalf("incoming.duration point sum %v attributes %v, want at least 50ms and outcome dropped", p.Sum, p.Attributes)
+	}
+}
+
+// A publish failure settles the waiter: the wc.peer.answer span ends with
+// the error and the request metric records publish_failed, for the dApp's
+// proposal and the wallet's settlement alike.
+func TestPublishFailureSettlesWaiter(t *testing.T) {
+	cases := []struct {
+		name, method string
+		run          func(h *harness) error
+	}{
+		{"propose", methodPropose, func(h *harness) error {
+			h.relay.failOn("wc_proposeSession", errRelay)
+			_, err := h.e.Connect(h.ctx(), evmConnect())
+			return err
+		}},
+		{"settle", methodSettle, func(h *harness) error {
+			_, _, id := h.receiveProposal(nil)
+			h.relay.failOn("wc_approveSession", errRelay)
+			_, err := h.e.Approve(h.ctx(), ApproveParams{ProposalID: id, Namespaces: evmSession("eip155:1")})
+			return err
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t)
+			exp, reader := otelSinks(t, h)
+			if err := c.run(h); !errors.Is(err, errRelay) {
+				t.Fatalf("got %v, want the relay error", err)
+			}
+			if h.e.Stats().Waiters != 0 {
+				t.Fatal("waiter left behind")
+			}
+			var answer *tracetest.SpanStub
+			for _, s := range exp.GetSpans() {
+				if s.Name == "wc.peer.answer" {
+					answer = &s
+				}
+			}
+			if answer == nil {
+				t.Fatal("wc.peer.answer span never ended")
+			}
+			if answer.Status.Code != codes.Error || attrOf(answer.Attributes, trace.AttrOutcome) != "publish_failed" ||
+				attrOf(answer.Attributes, trace.AttrRelayMethod) != c.method {
+				t.Fatalf("answer status %+v attributes %v", answer.Status, answer.Attributes)
+			}
+			req := histograms(t, reader)["walletconnect.request.duration"]
+			if len(req.DataPoints) != 1 {
+				t.Fatalf("request.duration points %+v, want one", req.DataPoints)
+			}
+			if p := req.DataPoints[0]; pointAttr(p, trace.AttrOutcome) != "publish_failed" || pointAttr(p, trace.AttrRelayMethod) != c.method {
+				t.Fatalf("request.duration attributes %v", p.Attributes)
+			}
+		})
 	}
 }
 

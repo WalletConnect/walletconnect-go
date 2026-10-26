@@ -38,10 +38,21 @@ type Incoming struct {
 	ID          json.RawMessage
 	Gen         uint64
 	Span        *trace.Span // the message's trace, ended when it is acked
+	Received    time.Time   // when the frame was read; the incoming latency metric counts from here
 	Topic       string
 	Message     string
 	Tag         int
 	PublishedAt int64
+}
+
+// Elapsed is the time since the message was read, or 0 when Received is
+// unset. It does not depend on tracing, so the latency metric works with a
+// meter provider alone.
+func (in Incoming) Elapsed() time.Duration {
+	if in.Received.IsZero() {
+		return 0
+	}
+	return time.Since(in.Received)
 }
 
 type Config struct {

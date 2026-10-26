@@ -33,13 +33,13 @@ func (e *Engine) handle(ctx context.Context, in relay.Incoming) bool {
 		if errors.Is(err, errTemporary) {
 			e.log.Error("open message", "topic", in.Topic, "err", err)
 			in.Span.End(err, "acked", false, "reason", "storage failed; the relay redelivers it")
-			e.tr.RecordIncoming(ctx, in.Span.Elapsed(), "unknown", "storage_failed")
+			e.tr.RecordIncoming(ctx, in.Elapsed(), "unknown", "storage_failed")
 			return false
 		}
 		e.log.Warn("dropping message", "topic", in.Topic, "err", err)
 		in.Span.Step("dropped", "reason", err)
 		e.tr.Dropped(ctx, dropReason(err))
-		e.tr.RecordIncoming(ctx, in.Span.Elapsed(), "unknown", "dropped")
+		e.tr.RecordIncoming(ctx, in.Elapsed(), "unknown", "dropped")
 		return true
 	}
 	kind := msg.Method
@@ -56,15 +56,15 @@ func (e *Engine) handle(ctx context.Context, in relay.Incoming) bool {
 		e.log.Error("handle message", "topic", in.Topic, "id", msg.ID, "method", msg.Method, "err", err)
 		if errors.Is(err, errTemporary) {
 			in.Span.End(err, "acked", false, "reason", "storage failed; the relay redelivers it")
-			e.tr.RecordIncoming(ctx, in.Span.Elapsed(), kind, "storage_failed")
+			e.tr.RecordIncoming(ctx, in.Elapsed(), kind, "storage_failed")
 			return false
 		}
 		in.Span.Step("handler failed", "err", err)
-		e.tr.RecordIncoming(ctx, in.Span.Elapsed(), kind, "failed")
+		e.tr.RecordIncoming(ctx, in.Elapsed(), kind, "failed")
 		return true
 	}
 	in.Span.Step("handled")
-	e.tr.RecordIncoming(ctx, in.Span.Elapsed(), kind, "handled")
+	e.tr.RecordIncoming(ctx, in.Elapsed(), kind, "handled")
 	return true
 }
 
