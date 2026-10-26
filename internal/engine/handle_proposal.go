@@ -172,7 +172,7 @@ func (e *Engine) onSettle(ctx context.Context, topic, symHex string, msg *jsonrp
 	}); err != nil {
 		return temporary(err)
 	}
-	e.enqueue(ctx, topic, symHex, response, optsSettleRes)
+	e.enqueue(ctx, topic, symHex, response, optsSettleRes.with(correlate(msg.ID)))
 	e.unsubscribe(ctx, pending.PairingTopic)
 	e.requestRearm()
 	e.emit(types.EventSessionConnect{Session: session})

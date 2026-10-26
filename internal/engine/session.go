@@ -67,8 +67,9 @@ func (e *Engine) Disconnect(ctx context.Context, topic string) error {
 	var forget func(*store.Tx) error
 	switch {
 	case s != nil:
-		payload := requestPayload(jsonrpc.PayloadID(), methodDelete, sdkerr.New(sdkerr.UserDisconnected, ""))
-		if err := e.publish(ctx, topic, s.SymKey, payload, optsDeleteReq); err != nil {
+		id := jsonrpc.PayloadID()
+		payload := requestPayload(id, methodDelete, sdkerr.New(sdkerr.UserDisconnected, ""))
+		if err := e.publish(ctx, topic, s.SymKey, payload, optsDeleteReq.with(correlate(id))); err != nil {
 			return err
 		}
 		forget = func(tx *store.Tx) error { return tx.DeleteSession(topic) }

@@ -190,6 +190,10 @@ tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(exp), sdktrace.WithResourc
 otel.SetTracerProvider(tp)
 ```
 
+## Transaction value flow
+
+Alongside each message the client tells the relay what the message is for, as the JS client does, so the network can attribute activity without reading the encrypted payload. Every request and result carries the request's payload id as `correlationId`. A session request names its chain, its method and, when the first parameter carries calldata, the contract it calls. A wallet's result adds the transaction hashes it produced; where a wallet only signs, the hash is computed locally the way the chain does it, for Sui, Near, Solana, Cosmos, Stellar, Polkadot and Algorand. An approval carries the approved chains, methods, events and session properties. These fields sit next to `topic`, `message` and `tag` in the relay call; the peer never sees them, nothing from the message itself is included, and a value that cannot be derived is left out rather than failing the publish. The method table is in `internal/engine/tvf_hashes.go`.
+
 ## Storage
 
 All state goes through `storage.KV`, a small transactional key-value interface. Two implementations ship with the SDK:
@@ -253,7 +257,7 @@ TEST_PROJECT_ID=... go run ./interop/bench -n 30
 | `events.go`, `types.go`, `errors.go` | Public events, types and errors |
 | `storage/` | `KV` interface, memory and bbolt backends |
 | `tracefile/`, `cmd/wctrace` | Trace file format, writer, reader and summary; the `wctrace` command |
-| `internal/engine` | Sign protocol. `dapp.go`, `wallet_*.go` and `session.go` send; `handle*.go` receive; `expiry.go` sweeps; `waiters.go`, `requests.go` and `publish.go` are the plumbing |
+| `internal/engine` | Sign protocol. `dapp.go`, `wallet_*.go` and `session.go` send; `handle*.go` receive; `expiry.go` sweeps; `waiters.go`, `requests.go` and `publish.go` are the plumbing; `tvf.go` and `tvf_hashes.go` describe messages to the relay |
 | `internal/relay` | Relay transport. `client.go` is the API, `runner.go` the state machine, `connection.go` the socket, `calls.go` request tracking, `frames.go` frame parsing |
 | `internal/store` | Typed records over `storage.KV`, one file per record kind |
 | `internal/trace` | Trace lines, the span exporter and OpenTelemetry spans and metrics behind one API |

@@ -93,7 +93,7 @@ func (e *Engine) Connect(ctx context.Context, p ConnectParams) (*Connection, err
 	e.requestRearm()
 
 	sent := sentRequest{id: proposal.ID, reply: e.addWaiter(ctx, proposal.ID, pairingTopic, methodPropose, ""), span: trace.From(ctx)}
-	if err := e.sendProposal(ctx, pairingTopic, symHex, payload); err != nil {
+	if err := e.sendProposal(ctx, pairingTopic, symHex, proposal.ID, payload); err != nil {
 		e.settle(e.removeWaiter(proposal.ID), err, "publish_failed")
 		_ = e.store.Update(context.Background(), func(tx *store.Tx) error { return tx.ForgetPairing(pairingTopic, proposal.ID) })
 		e.unsubscribe(ctx, pairingTopic)
@@ -106,7 +106,7 @@ func (e *Engine) Connect(ctx context.Context, p ConnectParams) (*Connection, err
 }
 
 // sendProposal subscribes to the pairing topic, then publishes the proposal.
-func (e *Engine) sendProposal(ctx context.Context, pairingTopic, symHex string, payload json.RawMessage) error {
+func (e *Engine) sendProposal(ctx context.Context, pairingTopic, symHex string, id int64, payload json.RawMessage) error {
 	if err := e.relay.Subscribe(ctx, pairingTopic); err != nil {
 		return fmt.Errorf("subscribe pairing topic: %w", err)
 	}
@@ -114,9 +114,9 @@ func (e *Engine) sendProposal(ctx context.Context, pairingTopic, symHex string, 
 	if err != nil {
 		return err
 	}
-	if _, err := e.relay.Request(ctx, "wc_proposeSession", map[string]any{
-		"pairingTopic": pairingTopic, "sessionProposal": msg, "ttl": fiveMinutes,
-	}); err != nil {
+	params := map[string]any{"pairingTopic": pairingTopic, "sessionProposal": msg, "ttl": fiveMinutes}
+	correlate(id).addTo(params)
+	if _, err := e.relay.Request(ctx, "wc_proposeSession", params); err != nil {
 		return fmt.Errorf("propose session: %w", err)
 	}
 	return nil

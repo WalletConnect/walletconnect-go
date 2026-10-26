@@ -167,10 +167,12 @@ func (e *Engine) Approve(ctx context.Context, p ApproveParams) (*Approval, error
 		return nil, err
 	}
 	settle := sentRequest{id: settleID, reply: e.addWaiter(ctx, settleID, session.Topic, methodSettle, ""), span: trace.From(ctx)}
-	if _, err := e.relay.Request(ctx, "wc_approveSession", map[string]any{
+	approveParams := map[string]any{
 		"pairingTopic": prop.PairingTopic, "sessionTopic": session.Topic,
 		"sessionProposalResponse": responseMsg, "sessionSettlementRequest": settleMsg, "ttl": fiveMinutes,
-	}); err != nil {
+	}
+	tvfForApprove(prop.ID, session).addTo(approveParams)
+	if _, err := e.relay.Request(ctx, "wc_approveSession", approveParams); err != nil {
 		e.settle(e.removeWaiter(settleID), err, "publish_failed")
 		_ = e.store.Update(context.Background(), func(tx *store.Tx) error {
 			if err := tx.DeleteSession(session.Topic); err != nil {
