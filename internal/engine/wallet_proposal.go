@@ -171,7 +171,7 @@ func (e *Engine) Approve(ctx context.Context, p ApproveParams) (*Approval, error
 		"pairingTopic": prop.PairingTopic, "sessionTopic": session.Topic,
 		"sessionProposalResponse": responseMsg, "sessionSettlementRequest": settleMsg, "ttl": fiveMinutes,
 	}
-	tvfForApprove(prop.ID, session).addTo(approveParams)
+	tnvForApprove(prop.ID, session).addTo(approveParams)
 	if _, err := e.relay.Request(ctx, "wc_approveSession", approveParams); err != nil {
 		e.settle(e.removeWaiter(settleID), err, "publish_failed")
 		_ = e.store.Update(context.Background(), func(tx *store.Tx) error {

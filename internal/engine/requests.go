@@ -37,7 +37,7 @@ func (e *Engine) sendRequest(ctx context.Context, s *store.SessionRecord, method
 	t := correlate(id)
 	if rp, ok := params.(requestParams); ok {
 		inner = rp.Request.Method
-		t = tvfForRequest(id, rp)
+		t = tnvForRequest(id, rp)
 	}
 	o = o.with(t)
 	reply := e.addWaiter(ctx, id, s.Topic, method, inner)

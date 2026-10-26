@@ -1,6 +1,6 @@
 package engine
 
-// Transaction value flow (TVF) data is what the relay collects about the
+// Total network value (TNV) data is what the relay collects about the
 // messages it carries: which request a message belongs to, what it does on
 // which chain, which session was approved, and the transaction hashes a
 // result produced. It rides on the relay call's params next to topic,
@@ -21,7 +21,7 @@ import (
 	"github.com/WalletConnect/walletconnect-go/internal/types"
 )
 
-type tvf struct {
+type tnv struct {
 	correlationID     int64
 	rpcMethods        []string
 	chainID           string
@@ -35,7 +35,7 @@ type tvf struct {
 }
 
 // addTo puts the set fields on a relay call's params.
-func (t *tvf) addTo(p map[string]any) {
+func (t *tnv) addTo(p map[string]any) {
 	if t == nil {
 		return
 	}
@@ -63,26 +63,26 @@ func (t *tvf) addTo(p map[string]any) {
 
 // correlate is what every request and every result carries: the payload id
 // of the request, so the relay can pair a request with its answer.
-func correlate(id int64) *tvf { return &tvf{correlationID: id} }
+func correlate(id int64) *tnv { return &tnv{correlationID: id} }
 
-// tvfForRequest describes an outgoing session request: the chain, the
+// tnvForRequest describes an outgoing session request: the chain, the
 // method and, when the call carries calldata, the contract it targets.
-func tvfForRequest(id int64, rp requestParams) *tvf {
-	return &tvf{correlationID: id, rpcMethods: []string{rp.Request.Method}, chainID: rp.ChainID,
+func tnvForRequest(id int64, rp requestParams) *tnv {
+	return &tnv{correlationID: id, rpcMethods: []string{rp.Request.Method}, chainID: rp.ChainID,
 		contractAddresses: contractAddresses(rp.Request.Params)}
 }
 
-// tvfForResult describes a wallet's result for a session request, with the
+// tnvForResult describes a wallet's result for a session request, with the
 // transaction hashes the result carries or that follow from it.
-func tvfForResult(id int64, req *types.PendingRequest, result json.RawMessage) *tvf {
-	return &tvf{correlationID: id, rpcMethods: []string{req.Method}, chainID: req.ChainID,
+func tnvForResult(id int64, req *types.PendingRequest, result json.RawMessage) *tnv {
+	return &tnv{correlationID: id, rpcMethods: []string{req.Method}, chainID: req.ChainID,
 		txHashes: txHashes(req.Method, req.Params, result), contractAddresses: contractAddresses(req.Params)}
 }
 
-// tvfForApprove describes a settled session: the chains, methods and
+// tnvForApprove describes a settled session: the chains, methods and
 // events it allows and its properties, under the proposal's id.
-func tvfForApprove(proposalID int64, s types.Session) *tvf {
-	return &tvf{correlationID: proposalID, approvedChains: namespaces.Chains(s.Namespaces),
+func tnvForApprove(proposalID int64, s types.Session) *tnv {
+	return &tnv{correlationID: proposalID, approvedChains: namespaces.Chains(s.Namespaces),
 		approvedMethods:   namespaceValues(s.Namespaces, func(ns types.SessionNamespace) []string { return ns.Methods }),
 		approvedEvents:    namespaceValues(s.Namespaces, func(ns types.SessionNamespace) []string { return ns.Events }),
 		sessionProperties: s.SessionProperties, scopedProperties: s.ScopedProperties}

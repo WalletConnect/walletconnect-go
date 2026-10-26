@@ -1,6 +1,6 @@
 package engine
 
-// Transaction hash extraction for the TVF data a wallet's result carries.
+// Transaction hash extraction for the TNV data a wallet's result carries.
 // Ported from extractTxHashesFromResult in
 // packages/sign-client/src/controllers/engine.ts and the helpers in
 // packages/utils/src/signatures.ts, polkadot.ts and canton.ts. Where a chain
@@ -27,10 +27,10 @@ import (
 	"golang.org/x/crypto/blake2b"
 )
 
-// tvfMethods are the session request methods whose results carry a
+// tnvMethods are the session request methods whose results carry a
 // transaction hash, with the result key that holds it; "" means the result
 // is the hash itself or needs the method-specific extraction below.
-var tvfMethods = map[string]string{
+var tnvMethods = map[string]string{
 	"eth_sendTransaction":    "",
 	"eth_sendRawTransaction": "",
 	"wallet_sendCalls":       "",
@@ -71,9 +71,9 @@ var tvfMethods = map[string]string{
 
 // txHashes returns the transaction hashes the result of a session request
 // carries, or nil when the method is not one that produces transactions or
-// the result cannot be read. It never fails: TVF data is best effort.
+// the result cannot be read. It never fails: TNV data is best effort.
 func txHashes(method string, params, result json.RawMessage) []string {
-	key, ok := tvfMethods[method]
+	key, ok := tnvMethods[method]
 	if !ok || len(result) == 0 || bytes.Equal(result, []byte("null")) {
 		return nil
 	}

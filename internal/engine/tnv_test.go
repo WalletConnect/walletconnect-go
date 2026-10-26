@@ -52,7 +52,7 @@ func seedSessionAllowing(h *harness, asWallet bool, methods ...string) (topic, s
 	return topic, symHex
 }
 
-func TestTVFOnProposal(t *testing.T) {
+func TestTNVOnProposal(t *testing.T) {
 	h := newHarness(t)
 	conn, err := h.e.Connect(h.ctx(), evmConnect())
 	if err != nil {
@@ -63,7 +63,7 @@ func TestTVFOnProposal(t *testing.T) {
 	}
 }
 
-func TestTVFOnApproval(t *testing.T) {
+func TestTNVOnApproval(t *testing.T) {
 	h := newHarness(t)
 	_, _, id := h.receiveProposal(nil)
 	ns := evmSession("eip155:1", "eip155:137")
@@ -91,7 +91,7 @@ func TestTVFOnApproval(t *testing.T) {
 
 // A dApp's session request names its chain and method, and the contract it
 // calls when the first parameter carries calldata.
-func TestTVFOnRequest(t *testing.T) {
+func TestTNVOnRequest(t *testing.T) {
 	cases := []struct {
 		method    string
 		params    any
@@ -128,7 +128,7 @@ func TestTVFOnRequest(t *testing.T) {
 }
 
 // A wallet's result adds the transaction hashes; an error carries nothing.
-func TestTVFOnResult(t *testing.T) {
+func TestTNVOnResult(t *testing.T) {
 	h := newHarness(t)
 	topic, _ := h.seedSession(true)
 	pending := func(method string, params any) types.PendingRequest {
@@ -171,7 +171,7 @@ func TestTVFOnResult(t *testing.T) {
 // Every other request and result carries the payload id, so the relay can
 // pair them: here a session update, an event, a disconnect and a handler's
 // answer to a ping.
-func TestTVFCorrelatesEveryMessage(t *testing.T) {
+func TestTNVCorrelatesEveryMessage(t *testing.T) {
 	h := newHarness(t)
 	topic, symHex := h.seedSession(true)
 	check := func(step string) {

@@ -42,7 +42,7 @@ func (e *Engine) Respond(ctx context.Context, topic string, id int64, result jso
 
 	// A result tells the relay what the request did and the transaction
 	// hashes it produced; an error carries nothing, as in the JS client.
-	payload, o := resultPayload(id, result), optsRequestRes.with(tvfForResult(id, req, result))
+	payload, o := resultPayload(id, result), optsRequestRes.with(tnvForResult(id, req, result))
 	if rpcErr != nil {
 		payload, o = errorPayload(id, rpcErr), optsRequestRes
 	}

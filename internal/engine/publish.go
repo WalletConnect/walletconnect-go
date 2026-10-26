@@ -43,7 +43,7 @@ func publishParams(topic, message string, o publishOpts) map[string]any {
 	if o.prompt {
 		p["prompt"] = true
 	}
-	o.tvf.addTo(p)
+	o.tnv.addTo(p)
 	return p
 }
 

@@ -254,14 +254,14 @@ func TestContractAddresses(t *testing.T) {
 	}
 }
 
-func TestTVFAddTo(t *testing.T) {
+func TestTNVAddTo(t *testing.T) {
 	p := map[string]any{"topic": "t"}
-	(*tvf)(nil).addTo(p)
-	(&tvf{}).addTo(p)
+	(*tnv)(nil).addTo(p)
+	(&tnv{}).addTo(p)
 	if len(p) != 1 {
 		t.Fatalf("empty data added fields: %v", p)
 	}
-	full := &tvf{correlationID: 7, rpcMethods: []string{"m"}, chainID: "eip155:1", txHashes: []string{"h"}, contractAddresses: []string{"c"},
+	full := &tnv{correlationID: 7, rpcMethods: []string{"m"}, chainID: "eip155:1", txHashes: []string{"h"}, contractAddresses: []string{"c"},
 		approvedChains: []string{"eip155:1"}, approvedMethods: []string{"personal_sign"}, approvedEvents: []string{"chainChanged"},
 		sessionProperties: map[string]string{"k": "v"}, scopedProperties: map[string]json.RawMessage{"eip155": json.RawMessage(`{}`)}}
 	full.addTo(p)
