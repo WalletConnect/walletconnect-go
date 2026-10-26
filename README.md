@@ -145,7 +145,7 @@ service:
     traces: {receivers: [otlpjsonfile], exporters: [otlp]}
 ```
 
-The file carries what the trace lines carry: topics, relay ids, payload ids, methods, chain ids, counts, timings and error text. It never holds a pairing URI, a key, an account or a message, so it can be attached to a bug report as it is.
+The file carries what the trace lines carry: topics, relay ids, payload ids, methods, chain ids, counts, timings and error text. It never holds a pairing URI, a key, an account or a message. A failed dial names the relay URL without its query, which carries the relay auth token, and any token that reaches a span by another path is scrubbed before export. So the file can be attached to a bug report as it is.
 
 ## OpenTelemetry
 

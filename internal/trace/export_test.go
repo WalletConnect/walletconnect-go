@@ -204,3 +204,42 @@ func TestExportFailureReportedOnce(t *testing.T) {
 		t.Fatalf("failure logged %d times:\n%s", n, buf.String())
 	}
 }
+
+const testJWT = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJkaWQ6a2V5OnoifQ.c2lnbmF0dXJlLXNpZ25hdHVyZS1zaWduYXR1cmU"
+
+// A token that reaches a span in an error or an attribute is scrubbed from
+// the exported record and from the OpenTelemetry span alike.
+func TestScrubTokens(t *testing.T) {
+	exp := &capture{}
+	tr, otel, _ := otelSinks(t, nil, false)
+	tr.exp = exp
+	dialErr := errors.New(`failed to WebSocket dial: Get "https://relay/?auth=` + testJWT + `&projectId=x": refused`)
+	s, _ := tr.Start(context.Background(), "relay connect", "relayError", "token "+testJWT+" in an attribute")
+	s.Step("retry", "err", dialErr)
+	s.End(dialErr)
+
+	rec := exp.byName(t, "relay.connect")
+	if strings.Contains(rec.Status.Message, testJWT) || !strings.Contains(rec.Status.Message, "auth=<jwt>&projectId=x") {
+		t.Errorf("file status %q", rec.Status.Message)
+	}
+	if v, _ := attrOf(rec.Attributes, "relay.error").(string); strings.Contains(v, testJWT) || !strings.Contains(v, "token <jwt> in") {
+		t.Errorf("file attribute %q", v)
+	}
+	if v, _ := attrOf(rec.Events[0].Attributes, "error.message").(string); strings.Contains(v, testJWT) {
+		t.Errorf("file event attribute %q", v)
+	}
+	osp := spanByName(t, otel, "relay.connect")
+	if strings.Contains(osp.Status.Description, testJWT) || strings.Contains(attrValue(osp.Attributes, "relay.error"), testJWT) {
+		t.Errorf("OpenTelemetry span still holds the token: %+v", osp)
+	}
+	for _, ev := range osp.Events {
+		for _, a := range ev.Attributes {
+			if strings.Contains(a.Value.AsString(), testJWT) {
+				t.Errorf("OpenTelemetry event %s attribute %s holds the token", ev.Name, a.Key)
+			}
+		}
+	}
+	if scrub("a topic 0123456789abcdef") != "a topic 0123456789abcdef" {
+		t.Error("scrub changed a string without a token")
+	}
+}

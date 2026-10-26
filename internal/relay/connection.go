@@ -37,6 +37,40 @@ func (r *runner) relayURL() (string, error) {
 	return u.String(), nil
 }
 
+// dialError is a dial failure whose message no longer quotes the relay
+// URL's query, which carries the auth JWT and the project ID. The original
+// stays reachable through Unwrap, so errors.Is and errors.As still work.
+type dialError struct {
+	msg string
+	err error
+}
+
+func (e *dialError) Error() string { return e.msg }
+func (e *dialError) Unwrap() error { return e.err }
+
+// redactDial hides dialURL's query in err's message. A dial error quotes
+// the URL it tried, and the message goes to the log, the trace and the
+// application's relay state event.
+func redactDial(err error, dialURL string) error {
+	if err == nil {
+		return nil
+	}
+	u, perr := url.Parse(dialURL)
+	if perr != nil || u.RawQuery == "" {
+		return err
+	}
+	msg := strings.ReplaceAll(err.Error(), "?"+u.RawQuery, "?<redacted>")
+	for _, key := range []string{"auth", "projectId"} {
+		if v := u.Query().Get(key); v != "" {
+			msg = strings.ReplaceAll(msg, v, "<redacted>")
+		}
+	}
+	if msg == err.Error() {
+		return err
+	}
+	return &dialError{msg: msg, err: err}
+}
+
 func (r *runner) connecting(ctx context.Context) state {
 	u, err := r.relayURL()
 	if err != nil {
@@ -49,6 +83,7 @@ func (r *runner) connecting(ctx context.Context) state {
 	conn, resp, err := websocket.Dial(dialCtx, u, nil)
 	cancel()
 	if err != nil {
+		err = redactDial(err, u)
 		span.End(err)
 		r.c.cfg.Tracer.RecordConnect(sctx, time.Since(dialStart), false)
 		if ctx.Err() != nil {

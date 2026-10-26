@@ -24,8 +24,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -244,8 +246,8 @@ func (s *Span) End(err error, attrs ...any) {
 			s.sp.SetAttributes(kvs...)
 		}
 		if err != nil {
-			s.sp.RecordError(err)
-			s.sp.SetStatus(codes.Error, err.Error())
+			s.sp.RecordError(scrubErr(err))
+			s.sp.SetStatus(codes.Error, scrub(err.Error()))
 		} else {
 			s.sp.SetStatus(codes.Ok, "")
 		}
@@ -261,7 +263,7 @@ func (s *Span) End(err error, attrs ...any) {
 		rec.End = time.Now()
 		rec.Attributes = fileAttrs(rec.Attributes, kvs)
 		if err != nil {
-			rec.Status = tracefile.Status{Code: tracefile.StatusError, Message: err.Error()}
+			rec.Status = tracefile.Status{Code: tracefile.StatusError, Message: scrub(err.Error())}
 		} else {
 			rec.Status = tracefile.Status{Code: tracefile.StatusOK}
 		}
@@ -382,6 +384,28 @@ func From(ctx context.Context) *Span {
 	return s
 }
 
+// jwtRe matches a JSON Web Token. A dial error quotes the relay URL, whose
+// query carries the relay auth token; the relay redacts that at the source,
+// and scrub keeps any token that reaches a span by another path out of
+// exported attributes and statuses.
+var jwtRe = regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`)
+
+func scrub(s string) string {
+	if !strings.Contains(s, "eyJ") {
+		return s
+	}
+	return jwtRe.ReplaceAllString(s, "<jwt>")
+}
+
+// scrubErr returns err, or an error with the scrubbed message when the
+// message held a token.
+func scrubErr(err error) error {
+	if msg := err.Error(); scrub(msg) != msg {
+		return errors.New(scrub(msg))
+	}
+	return err
+}
+
 // spanName maps a log action to an OpenTelemetry span name: API actions
 // become walletconnect.<action>, relay events relay.<event>, and names that
 // already contain a dot are used as given.
@@ -486,7 +510,7 @@ func attr(key string, v any) attribute.KeyValue {
 	}
 	switch x := v.(type) {
 	case string:
-		return attribute.String(name, x)
+		return attribute.String(name, scrub(x))
 	case bool:
 		return attribute.Bool(name, x)
 	case int:
@@ -505,7 +529,7 @@ func attr(key string, v any) attribute.KeyValue {
 	case []byte:
 		return attribute.String(name, string(x))
 	case error:
-		return attribute.String(name, x.Error())
+		return attribute.String(name, scrub(x.Error()))
 	case fmt.Stringer:
 		return attribute.String(name, x.String())
 	default:
