@@ -171,8 +171,8 @@ func TestCantonTransactionHashes(t *testing.T) {
 			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
 		}
 	}
-	if got := txHashes("canton_prepareSignExecute", raw(cases[0].params), raw(map[string]any{"payload": map[string]any{}})); got != nil {
-		t.Errorf("no update id should give nothing, got %v", got)
+	if got := txHashes("canton_prepareSignExecute", raw(cases[0].params), raw(map[string]any{"payload": map[string]any{}})); fmt.Sprint(got) != `[{"payload":{}}]` {
+		t.Errorf("no update id should fall back to the result text, got %v", got)
 	}
 }
 
@@ -207,16 +207,23 @@ func TestTxHashesByMethod(t *testing.T) {
 		{"cosmos_signDirect", nil, json.RawMessage(cosmosResult), []string{cosmosTxHash}},
 		{"stellar_signXDR", map[string]any{"chain": "stellar:testnet", "xdr": "x"}, map[string]any{"signedXDR": stellarVectors[2].xdr}, []string{stellarVectors[2].hash}},
 		{"stellar_signAndSubmitXDR", nil, map[string]any{"tx_hash": "st1"}, []string{"st1"}},
-		// Not transaction methods: nothing, even when the result is a string.
-		{"personal_sign", nil, "0xsignature", nil},
-		{"eth_signTypedData_v4", nil, "0xsignature", nil},
-		// Unreadable or empty results give nothing rather than failing.
-		{"eth_sendTransaction", nil, nil, nil},
-		{"solana_signTransaction", nil, map[string]any{"other": 1}, nil},
+		// Methods the table does not cover report the result itself: a string
+		// as it is, anything else as its JSON text.
+		{"personal_sign", nil, "0xsignature", []string{"0xsignature"}},
+		{"eth_signTypedData_v4", nil, "0xsignature", []string{"0xsignature"}},
+		{"xyz_sendTransaction", nil, map[string]any{"hash": "0xabc", "block": 7}, []string{`{"block":7,"hash":"0xabc"}`}},
+		{"xyz_sign", nil, 42, []string{"42"}},
+		{"xyz_sign", nil, []any{"0x1", "0x2"}, []string{`["0x1","0x2"]`}},
+		// A covered method whose result cannot be read falls back to the same.
+		{"solana_signTransaction", nil, map[string]any{"other": 1}, []string{`{"other":1}`}},
 		{"solana_signTransaction", nil, "a string where an object was expected", []string{"a string where an object was expected"}},
-		{"sui_signTransaction", nil, map[string]any{"transactionBytes": "!!!"}, nil},
-		{"near_signTransaction", nil, "x", nil},
-		{"tron_signTransaction", nil, map[string]any{"txID": 5}, nil},
+		{"sui_signTransaction", nil, map[string]any{"transactionBytes": "!!!"}, []string{`{"transactionBytes":"!!!"}`}},
+		{"near_signTransaction", nil, "x", []string{"x"}},
+		{"tron_signTransaction", nil, map[string]any{"txID": 5}, []string{`{"txID":5}`}},
+		// Null and empty results report nothing.
+		{"eth_sendTransaction", nil, nil, nil},
+		{"personal_sign", nil, nil, nil},
+		{"personal_sign", nil, "", nil},
 	}
 	for _, c := range cases {
 		var result json.RawMessage

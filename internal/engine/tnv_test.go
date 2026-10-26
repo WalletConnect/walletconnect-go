@@ -156,6 +156,15 @@ func TestTNVOnResult(t *testing.T) {
 		t.Fatalf("sui result publish params %v", p)
 	}
 
+	// A method the table does not cover reports the result as text.
+	req = pending("xyz_signAndSend", map[string]any{"tx": "x"})
+	if err := h.e.Respond(h.ctx(), topic, req.ID, raw(map[string]any{"hash": "0xabc"}), nil); err != nil {
+		t.Fatal(err)
+	}
+	if p := h.lastPublish(topic); fmt.Sprint(p["txHashes"]) != `[{"hash":"0xabc"}]` || fmt.Sprint(p["rpcMethods"]) != "[xyz_signAndSend]" {
+		t.Fatalf("uncovered method publish params %v", p)
+	}
+
 	req = pending("eth_sendTransaction", []any{map[string]any{"to": "0xc0ffee", "data": "0x"}})
 	if err := h.e.Respond(h.ctx(), topic, req.ID, nil, &jsonrpc.Error{Code: 5000, Message: "rejected"}); err != nil {
 		t.Fatal(err)

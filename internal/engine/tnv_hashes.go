@@ -70,18 +70,35 @@ var tnvMethods = map[string]string{
 }
 
 // txHashes returns the transaction hashes the result of a session request
-// carries, or nil when the method is not one that produces transactions or
-// the result cannot be read. It never fails: TNV data is best effort.
+// carries. For a method in the table the hash is picked from the result or
+// computed the way the chain identifies the transaction. For any other
+// method, and for a result the extraction cannot read, the result itself is
+// reported, a string as it is and anything else as its JSON text, so the
+// relay collects results for chains the table does not cover yet. A null
+// result reports nothing. It never fails: TNV data is best effort.
 func txHashes(method string, params, result json.RawMessage) []string {
-	key, ok := tnvMethods[method]
-	if !ok || len(result) == 0 || bytes.Equal(result, []byte("null")) {
+	if len(result) == 0 || bytes.Equal(result, []byte("null")) {
 		return nil
 	}
-	hashes, err := extractTxHashes(method, key, params, result)
-	if err != nil || len(hashes) == 0 {
-		return nil
+	if key, ok := tnvMethods[method]; ok {
+		if hashes, err := extractTxHashes(method, key, params, result); err == nil && len(hashes) > 0 {
+			return hashes
+		}
 	}
-	return hashes
+	return nonEmpty(resultText(result))
+}
+
+// resultText is a JSON string's value, or the compact JSON of anything else.
+func resultText(result json.RawMessage) string {
+	var s string
+	if err := json.Unmarshal(result, &s); err == nil {
+		return s
+	}
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, result); err != nil {
+		return strings.TrimSpace(string(result))
+	}
+	return buf.String()
 }
 
 func extractTxHashes(method, key string, params, result json.RawMessage) ([]string, error) {
