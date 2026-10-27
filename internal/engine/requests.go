@@ -34,9 +34,12 @@ func (e *Engine) sendRequest(ctx context.Context, s *store.SessionRecord, method
 		return sentRequest{}, err
 	}
 	inner := ""
+	t := correlate(id)
 	if rp, ok := params.(requestParams); ok {
 		inner = rp.Request.Method
+		t = tnvForRequest(id, rp)
 	}
+	o = o.with(t)
 	reply := e.addWaiter(ctx, id, s.Topic, method, inner)
 	if err := e.publish(ctx, s.Topic, s.SymKey, payload, o); err != nil {
 		e.settle(e.removeWaiter(id), err, "publish_failed")

@@ -129,7 +129,7 @@ func (e *Engine) onUpdate(ctx context.Context, topic, symHex string, msg *jsonrp
 		return temporary(err)
 	}
 	e.markSeen(e.lastUpdate, topic, msg.ID)
-	e.enqueue(ctx, topic, symHex, response, optsUpdateRes)
+	e.enqueue(ctx, topic, symHex, response, optsUpdateRes.with(correlate(msg.ID)))
 	e.emit(types.EventSessionUpdate{Topic: topic, ID: msg.ID, Namespaces: p.Namespaces})
 	return nil
 }
@@ -154,7 +154,7 @@ func (e *Engine) onExtend(ctx context.Context, topic, symHex string, msg *jsonrp
 	}); err != nil {
 		return temporary(err)
 	}
-	e.enqueue(ctx, topic, symHex, response, optsExtendRes)
+	e.enqueue(ctx, topic, symHex, response, optsExtendRes.with(correlate(msg.ID)))
 	e.requestRearm()
 	e.emit(types.EventSessionExtend{Topic: topic, ID: msg.ID, Expiry: s.Expiry})
 	return nil
@@ -173,7 +173,7 @@ func (e *Engine) onPing(ctx context.Context, topic, symHex string, msg *jsonrpc.
 	if err := e.record(ctx, topic, msg, response); err != nil {
 		return err
 	}
-	e.enqueue(ctx, topic, symHex, response, optsPingRes)
+	e.enqueue(ctx, topic, symHex, response, optsPingRes.with(correlate(msg.ID)))
 	e.emit(types.EventSessionPing{Topic: topic, ID: msg.ID})
 	return nil
 }

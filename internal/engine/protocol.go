@@ -34,6 +34,13 @@ type publishOpts struct {
 	tag    int
 	ttl    int64
 	prompt bool
+	tnv    *tnv // relay-side data about the message; see tnv.go
+}
+
+// with returns a copy of o carrying t.
+func (o publishOpts) with(t *tnv) publishOpts {
+	o.tnv = t
+	return o
 }
 
 // Tags and TTLs from packages/sign-client/src/constants/engine.ts.

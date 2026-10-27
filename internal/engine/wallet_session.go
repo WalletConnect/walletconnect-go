@@ -40,11 +40,13 @@ func (e *Engine) Respond(ctx context.Context, topic string, id int64, result jso
 		return fmt.Errorf("session %s: %w", topic, types.ErrNotFound)
 	}
 
-	payload := resultPayload(id, result)
+	// A result tells the relay what the request did and the transaction
+	// hashes it produced; an error carries nothing, as in the JS client.
+	payload, o := resultPayload(id, result), optsRequestRes.with(tnvForResult(id, req, result))
 	if rpcErr != nil {
-		payload = errorPayload(id, rpcErr)
+		payload, o = errorPayload(id, rpcErr), optsRequestRes
 	}
-	if err := e.publish(ctx, topic, s.SymKey, payload, optsRequestRes); err != nil {
+	if err := e.publish(ctx, topic, s.SymKey, payload, o); err != nil {
 		return err
 	}
 	return e.store.Update(ctx, func(tx *store.Tx) error {
@@ -116,5 +118,5 @@ func (e *Engine) Emit(ctx context.Context, topic, chainID, name string, data jso
 	}); err != nil {
 		return err
 	}
-	return e.publish(ctx, topic, s.SymKey, payload, optsEventReq)
+	return e.publish(ctx, topic, s.SymKey, payload, optsEventReq.with(correlate(id)))
 }
