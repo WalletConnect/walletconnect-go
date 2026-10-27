@@ -241,6 +241,9 @@ func (s *Span) End(err error, attrs ...any) {
 	if len(attrs) > 0 && (s.recording() || s.exporting()) {
 		kvs = kv(attrs)
 	}
+	if err != nil {
+		kvs = append(kvs, attribute.String(AttrErrorType, ErrorType(err)))
+	}
 	if s.recording() {
 		if len(kvs) > 0 {
 			s.sp.SetAttributes(kvs...)
