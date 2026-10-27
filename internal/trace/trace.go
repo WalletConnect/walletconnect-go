@@ -1,22 +1,22 @@
 // Package trace follows one action, such as a request or an incoming relay
-// message, from start to finish, and reports it two ways.
+// message, from start to finish, and reports it three ways.
 //
 // Trace lines go to a logger: every line of a span shares its trace ID and
 // reports the time since the span started, so an action can be read in order
 // across the API, the engine and the relay transport.
 //
-// OpenTelemetry spans and metrics go to the providers the application
-// installed. Each action, relay call and incoming message becomes a span
-// carrying the identifiers needed to match it with relay-side logs (topic,
-// relay JSON-RPC id, payload id, tag), and latencies are recorded as
-// histograms with bounded attributes. Child spans measure one part of an
-// action, such as the wait for the peer's answer, and exist only in
-// OpenTelemetry: they add no log lines.
+// Spans go to an Exporter, normally the trace file the client keeps beside
+// its database, and to the OpenTelemetry providers the application installed.
+// Each action, relay call and incoming message becomes a span carrying the
+// identifiers needed to match it with relay-side logs (topic, relay JSON-RPC
+// id, payload id, tag). Child spans measure one part of an action, such as
+// the wait for the peer's answer; they are exported but add no log lines.
+// Latencies also go to OpenTelemetry as histograms with bounded attributes.
 //
-// A nil *Tracer or *Span is valid and does nothing. With no logger and no
-// provider, Start returns nil spans without touching OpenTelemetry, so
-// tracing costs nothing when it is off; with a provider that does not record,
-// it costs one span start.
+// A nil *Tracer or *Span is valid and does nothing. With no logger, no
+// exporter and no provider, Start returns nil spans without touching
+// OpenTelemetry, so tracing costs nothing when it is off; with a provider
+// that does not record, it costs one span start.
 package trace
 
 import (
@@ -24,24 +24,37 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
 	oteltrace "go.opentelemetry.io/otel/trace"
+
+	"github.com/WalletConnect/walletconnect-go/tracefile"
 )
 
 // Scope is the OpenTelemetry instrumentation scope of every span and metric.
 const Scope = "github.com/WalletConnect/walletconnect-go"
 
+// An Exporter receives every span when it ends. The trace file is one.
+type Exporter interface {
+	Export(*tracefile.Span) error
+}
+
 type Options struct {
-	// Logger receives trace lines at info level when LogLines is set.
+	// Logger receives trace lines at info level when LogLines is set, and
+	// a warning if the Exporter fails.
 	Logger   *slog.Logger
 	LogLines bool
+	// Exporter receives every span; nil turns it off.
+	Exporter Exporter
 	// TracerProvider and MeterProvider receive spans and metrics; nil turns
 	// each off. Pass otel.GetTracerProvider() to use the globals.
 	TracerProvider oteltrace.TracerProvider
@@ -52,14 +65,18 @@ type Options struct {
 
 type Tracer struct {
 	log    *slog.Logger     // nil when trace lines are off
+	errlog *slog.Logger     // for an exporter failure, reported once
+	exp    Exporter         // nil when exporting is off
 	tracer oteltrace.Tracer // nil when OpenTelemetry tracing is off
 	m      instruments      // zero when OpenTelemetry metrics are off
+
+	exportFailed sync.Once
 }
 
 // New returns a tracer for the given sinks. A tracer whose sinks are all
 // off still works; its spans are nil.
 func New(o Options) *Tracer {
-	t := &Tracer{}
+	t := &Tracer{exp: o.Exporter, errlog: o.Logger}
 	if o.TracerProvider != nil {
 		t.tracer = o.TracerProvider.Tracer(Scope, oteltrace.WithInstrumentationVersion(o.Version))
 	}
@@ -73,15 +90,28 @@ func New(o Options) *Tracer {
 }
 
 type Span struct {
-	t      *Tracer
-	id     string
-	action string
-	start  time.Time
-	sp     oteltrace.Span // nil when OpenTelemetry tracing is off
-	quiet  bool           // a child span: OpenTelemetry only, no log lines
+	t       *Tracer
+	id      string // the log trace ID: the first eight hex characters of traceID
+	traceID oteltrace.TraceID
+	spanID  oteltrace.SpanID
+	action  string
+	start   time.Time
+	sp      oteltrace.Span // nil when OpenTelemetry tracing is off
+	quiet   bool           // a child span: exported only, no log lines
+
+	mu  sync.Mutex
+	rec *tracefile.Span // the record being built for the exporter; nil when off or after End
 }
 
 func (s *Span) recording() bool { return s.sp != nil && s.sp.IsRecording() }
+
+// exporting reports whether the span still has a record to export; End
+// takes it away, possibly on another goroutine than a late Step.
+func (s *Span) exporting() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.rec != nil
+}
 
 // Start opens a span for an action and logs its first line. The returned
 // context carries the span, so spans started from it become its children.
@@ -94,9 +124,9 @@ func (t *Tracer) StartIncoming(ctx context.Context, action string, attrs ...any)
 	return t.start(ctx, oteltrace.SpanKindConsumer, action, false, attrs)
 }
 
-// Child opens an OpenTelemetry-only span under the span ctx carries, for a
-// part of an action with its own duration. It writes no log lines. The span
-// is nil when nothing records, so callers need no checks.
+// Child opens a span under the span ctx carries, for a part of an action
+// with its own duration. It is exported like any span but writes no log
+// lines. The span is nil when nothing records, so callers need no checks.
 func (t *Tracer) Child(ctx context.Context, name string, attrs ...any) (*Span, context.Context) {
 	return t.start(ctx, oteltrace.SpanKindClient, name, true, attrs)
 }
@@ -116,30 +146,56 @@ func (t *Tracer) start(ctx context.Context, kind oteltrace.SpanKind, action stri
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if t.tracer == nil && (quiet || t.log == nil) {
+	if t.tracer == nil && t.exp == nil && (quiet || t.log == nil) {
 		return nil, ctx
 	}
 	parent := From(ctx)
 	var sp oteltrace.Span
+	var otelParent oteltrace.SpanContext
+	var kvs []attribute.KeyValue
 	if t.tracer != nil {
+		otelParent = oteltrace.SpanContextFromContext(ctx)
 		ctx, sp = t.tracer.Start(ctx, spanName(action), spanKinds[kind])
 		if !sp.IsRecording() {
-			if quiet || t.log == nil {
+			if t.exp == nil && (quiet || t.log == nil) {
 				sp.End()
 				return nil, ctx
 			}
 		} else {
-			sp.SetAttributes(kv(attrs)...)
+			kvs = kv(attrs)
+			sp.SetAttributes(kvs...)
 		}
 	}
 	s := &Span{t: t, action: action, start: time.Now(), sp: sp, quiet: quiet}
+	// Identifiers: OpenTelemetry's when it issued them, so the file and a
+	// backend name the same span; otherwise the parent's trace, or a new one.
+	var parentID oteltrace.SpanID
 	switch {
 	case sp != nil && sp.SpanContext().HasTraceID():
-		s.id = sp.SpanContext().TraceID().String()[:8]
+		sc := sp.SpanContext()
+		s.traceID, s.spanID = sc.TraceID(), sc.SpanID()
+		if parent != nil {
+			parentID = parent.spanID
+		} else if otelParent.IsValid() {
+			parentID = otelParent.SpanID()
+		}
 	case parent != nil:
-		s.id = parent.id
+		s.traceID, parentID = parent.traceID, parent.spanID
+		_, _ = rand.Read(s.spanID[:])
 	default:
-		s.id = randomID()
+		_, _ = rand.Read(s.traceID[:])
+		_, _ = rand.Read(s.spanID[:])
+	}
+	s.id = hex.EncodeToString(s.traceID[:4])
+	if t.exp != nil {
+		if kvs == nil {
+			kvs = kv(attrs)
+		}
+		s.rec = &tracefile.Span{TraceID: s.traceID.String(), SpanID: s.spanID.String(), Name: spanName(action),
+			Kind: fileKinds[kind], Start: s.start, Attributes: fileAttrs(nil, kvs)}
+		if parentID.IsValid() {
+			s.rec.ParentSpanID = parentID.String()
+		}
 	}
 	ctx = context.WithValue(ctx, ctxKey{}, s)
 	if !quiet {
@@ -148,21 +204,30 @@ func (t *Tracer) start(ctx context.Context, kind oteltrace.SpanKind, action stri
 	return s, ctx
 }
 
-// Step logs progress and adds an event to the OpenTelemetry span. Steps may
-// follow End on the log side: a peer answer can arrive after the API call
-// that sent the request has returned.
+// Step logs progress and adds an event to the span. Steps may follow End on
+// the log side: a peer answer can arrive after the API call that sent the
+// request has returned. Such late steps are not exported.
 func (s *Span) Step(step string, attrs ...any) {
 	if s == nil {
 		return
 	}
 	s.emit(step, nil, attrs)
-	if s.recording() {
-		s.sp.AddEvent(step, oteltrace.WithAttributes(kv(attrs)...))
+	if !s.recording() && !s.exporting() {
+		return
 	}
+	kvs := kv(attrs)
+	if s.recording() {
+		s.sp.AddEvent(step, oteltrace.WithAttributes(kvs...))
+	}
+	s.mu.Lock()
+	if s.rec != nil {
+		s.rec.Events = append(s.rec.Events, tracefile.Event{Name: step, Time: time.Now(), Attributes: fileAttrs(nil, kvs)})
+	}
+	s.mu.Unlock()
 }
 
-// End logs the outcome, "done" or "failed" with err, and ends the
-// OpenTelemetry span with the matching status.
+// End logs the outcome, "done" or "failed" with err, ends the OpenTelemetry
+// span with the matching status and exports the span.
 func (s *Span) End(err error, attrs ...any) {
 	if s == nil {
 		return
@@ -172,13 +237,17 @@ func (s *Span) End(err error, attrs ...any) {
 	} else {
 		s.emit("done", nil, attrs)
 	}
+	var kvs []attribute.KeyValue
+	if len(attrs) > 0 && (s.recording() || s.exporting()) {
+		kvs = kv(attrs)
+	}
 	if s.recording() {
-		if len(attrs) > 0 {
-			s.sp.SetAttributes(kv(attrs)...)
+		if len(kvs) > 0 {
+			s.sp.SetAttributes(kvs...)
 		}
 		if err != nil {
-			s.sp.RecordError(err)
-			s.sp.SetStatus(codes.Error, err.Error())
+			s.sp.RecordError(scrubErr(err))
+			s.sp.SetStatus(codes.Error, scrub(err.Error()))
 		} else {
 			s.sp.SetStatus(codes.Ok, "")
 		}
@@ -186,15 +255,36 @@ func (s *Span) End(err error, attrs ...any) {
 	if s.sp != nil {
 		s.sp.End()
 	}
+	s.mu.Lock()
+	rec := s.rec
+	s.rec = nil
+	s.mu.Unlock()
+	if rec != nil {
+		rec.End = time.Now()
+		rec.Attributes = fileAttrs(rec.Attributes, kvs)
+		if err != nil {
+			rec.Status = tracefile.Status{Code: tracefile.StatusError, Message: scrub(err.Error())}
+		} else {
+			rec.Status = tracefile.Status{Code: tracefile.StatusOK}
+		}
+		s.t.export(rec)
+	}
 }
 
 // Link records that other, usually the incoming message that answered this
 // span's request, belongs to this span's story.
 func (s *Span) Link(other *Span) {
-	if s == nil || other == nil || other.sp == nil || !s.recording() {
+	if s == nil || other == nil {
 		return
 	}
-	s.sp.AddLink(oteltrace.Link{SpanContext: other.sp.SpanContext()})
+	if other.sp != nil && s.recording() {
+		s.sp.AddLink(oteltrace.Link{SpanContext: other.sp.SpanContext()})
+	}
+	s.mu.Lock()
+	if s.rec != nil {
+		s.rec.Links = append(s.rec.Links, tracefile.Link{TraceID: other.traceID.String(), SpanID: other.spanID.String()})
+	}
+	s.mu.Unlock()
 }
 
 // ID is the span's trace ID, or "" for a nil span.
@@ -225,6 +315,39 @@ func (s *Span) emit(step string, err error, attrs []any) {
 	s.t.log.Info("trace", args...)
 }
 
+// export hands a finished span to the exporter. A failing exporter is
+// reported once, then ignored: the trace file must never fail the client.
+func (t *Tracer) export(rec *tracefile.Span) {
+	if err := t.exp.Export(rec); err != nil {
+		t.exportFailed.Do(func() {
+			if t.errlog != nil {
+				t.errlog.Warn("trace export failed; later failures are not logged", "err", err)
+			}
+		})
+	}
+}
+
+// fileAttrs appends kvs to attrs as trace file attributes.
+func fileAttrs(attrs []tracefile.Attribute, kvs []attribute.KeyValue) []tracefile.Attribute {
+	for _, kv := range kvs {
+		a := tracefile.Attribute{Key: string(kv.Key)}
+		switch kv.Value.Type() {
+		case attribute.STRING:
+			a.Value = kv.Value.AsString()
+		case attribute.BOOL:
+			a.Value = kv.Value.AsBool()
+		case attribute.INT64:
+			a.Value = kv.Value.AsInt64()
+		case attribute.FLOAT64:
+			a.Value = kv.Value.AsFloat64()
+		default:
+			a.Value = kv.Value.String()
+		}
+		attrs = append(attrs, a)
+	}
+	return attrs
+}
+
 // spanKinds are preallocated so a non-recording start allocates nothing for
 // its options.
 var spanKinds = map[oteltrace.SpanKind]oteltrace.SpanStartOption{
@@ -233,10 +356,10 @@ var spanKinds = map[oteltrace.SpanKind]oteltrace.SpanStartOption{
 	oteltrace.SpanKindConsumer: oteltrace.WithSpanKind(oteltrace.SpanKindConsumer),
 }
 
-func randomID() string {
-	b := make([]byte, 4)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
+var fileKinds = map[oteltrace.SpanKind]tracefile.Kind{
+	oteltrace.SpanKindInternal: tracefile.KindInternal,
+	oteltrace.SpanKindClient:   tracefile.KindClient,
+	oteltrace.SpanKindConsumer: tracefile.KindConsumer,
 }
 
 type ctxKey struct{}
@@ -259,6 +382,28 @@ func From(ctx context.Context) *Span {
 	}
 	s, _ := ctx.Value(ctxKey{}).(*Span)
 	return s
+}
+
+// jwtRe matches a JSON Web Token. A dial error quotes the relay URL, whose
+// query carries the relay auth token; the relay redacts that at the source,
+// and scrub keeps any token that reaches a span by another path out of
+// exported attributes and statuses.
+var jwtRe = regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`)
+
+func scrub(s string) string {
+	if !strings.Contains(s, "eyJ") {
+		return s
+	}
+	return jwtRe.ReplaceAllString(s, "<jwt>")
+}
+
+// scrubErr returns err, or an error with the scrubbed message when the
+// message held a token.
+func scrubErr(err error) error {
+	if msg := err.Error(); scrub(msg) != msg {
+		return errors.New(scrub(msg))
+	}
+	return err
 }
 
 // spanName maps a log action to an OpenTelemetry span name: API actions
@@ -365,7 +510,7 @@ func attr(key string, v any) attribute.KeyValue {
 	}
 	switch x := v.(type) {
 	case string:
-		return attribute.String(name, x)
+		return attribute.String(name, scrub(x))
 	case bool:
 		return attribute.Bool(name, x)
 	case int:
@@ -384,7 +529,7 @@ func attr(key string, v any) attribute.KeyValue {
 	case []byte:
 		return attribute.String(name, string(x))
 	case error:
-		return attribute.String(name, x.Error())
+		return attribute.String(name, scrub(x.Error()))
 	case fmt.Stringer:
 		return attribute.String(name, x.String())
 	default:
@@ -464,9 +609,17 @@ func (t *Tracer) RecordConnect(ctx context.Context, d time.Duration, ok bool) {
 	t.m.connect.Record(ctx, d.Seconds(), set(attribute.String(AttrOutcome, outcome)))
 }
 
+// Reconnect counts a reconnection and exports it as a relay.reconnect span
+// with the reason, so a trace file shows them without a metrics backend.
 func (t *Tracer) Reconnect(ctx context.Context, reason string) {
-	if t != nil && t.m.reconnects != nil {
+	if t == nil {
+		return
+	}
+	if t.m.reconnects != nil {
 		t.m.reconnects.Add(ctx, 1, set(attribute.String(AttrReason, reason)))
+	}
+	if s, _ := t.start(ctx, oteltrace.SpanKindInternal, "relay.reconnect", true, []any{"reason", reason}); s != nil {
+		s.End(nil)
 	}
 }
 
