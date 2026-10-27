@@ -109,7 +109,10 @@ func (r *runner) poisoned(ctx context.Context) state {
 }
 
 // reconnect drops the connection and queues every in-flight call for resend.
-func (r *runner) reconnect(err error) state {
+// reconnect drops the socket and goes to backoff. reason names the cause for
+// the reconnect metric: connection_lost, ping_failed, send_failed, requested.
+func (r *runner) reconnect(err error, reason string) state {
+	r.c.cfg.Tracer.Reconnect(context.Background(), reason)
 	r.closeConn()
 	r.requeue()
 	r.notify(false, err)

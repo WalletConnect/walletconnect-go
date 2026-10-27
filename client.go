@@ -23,6 +23,8 @@ import (
 	"github.com/WalletConnect/walletconnect-go/internal/store"
 	"github.com/WalletConnect/walletconnect-go/internal/trace"
 	"github.com/WalletConnect/walletconnect-go/storage"
+	"go.opentelemetry.io/otel/metric"
+	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
 // Version is the SDK version reported to the relay.
@@ -48,6 +50,13 @@ type Options struct {
 	// call and each incoming relay message gets a trace ID, and every relay
 	// send, reply, delivery and ack is logged under it with elapsed times.
 	Trace bool
+	// TracerProvider and MeterProvider receive OpenTelemetry spans and
+	// metrics for every action, relay call and incoming message; nil turns
+	// each off. Pass otel.GetTracerProvider() and otel.GetMeterProvider() to
+	// use the globals. They are independent of Trace: spans and metrics do
+	// not need the log lines, and the log lines do not need them.
+	TracerProvider oteltrace.TracerProvider
+	MeterProvider  metric.MeterProvider
 
 	now func() time.Time // test hook for the protocol clock
 }
@@ -86,7 +95,8 @@ func New(ctx context.Context, opts Options) (*Client, error) {
 		return topics, err
 	}
 
-	tracer := trace.New(opts.Logger, opts.Trace)
+	tracer := trace.New(trace.Options{Logger: opts.Logger, LogLines: opts.Trace,
+		TracerProvider: opts.TracerProvider, MeterProvider: opts.MeterProvider, Version: Version})
 	engineCtx, stopEngine := context.WithCancel(context.Background())
 	relayCtx, stopRelay := context.WithCancel(context.Background())
 	dispatchCtx, stopDispatch := context.WithCancel(context.Background())

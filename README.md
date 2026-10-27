@@ -108,6 +108,49 @@ trace=8bf5ecff action=incoming step=done              elapsed=4.9ms    acked=tru
 
 The relay confirms a publish only after the receiver acks it, so the `took` of an `irn_publish` reply shows how long the peer took to receive the message. That makes tracing the first place to look when a request seems stuck.
 
+## OpenTelemetry
+
+Set `Options.TracerProvider` and `Options.MeterProvider` to get the same actions as spans and latencies as metrics, in whatever backend your application exports to. Both are off when nil, and they are independent of `Options.Trace`: the log lines need no provider, and the providers need no log lines. When both are on, the log trace ID is the first eight characters of the OpenTelemetry trace ID, so a log line and a span name the same thing.
+
+```go
+client, err := walletconnect.New(ctx, walletconnect.Options{
+	ProjectID:      projectID,
+	TracerProvider: otel.GetTracerProvider(), // or your own sdktrace.TracerProvider
+	MeterProvider:  otel.GetMeterProvider(),
+})
+```
+
+Spans carry the identifiers that match relay-side logs, untruncated: `wc.topic`, `relay.id` (the relay JSON-RPC id), `wc.rpc.id` (the payload id), `relay.tag`, `relay.socket`, and for deliveries `relay.published_at`. An API call made inside one of your spans becomes its child.
+
+| Span | From | To |
+|---|---|---|
+| `walletconnect.<action>` (connect, pair, approve, reject, request, respond, update, extend, ping, disconnect, emit) | the API call | it returns |
+| `wc.peer.answer` | a request leaves | the peer answers, the wait times out or is cancelled; linked to the `relay.incoming` span that carried the answer |
+| `relay.publish`, `relay.subscribe`, `relay.batch_subscribe`, `relay.unsubscribe` | the call is written | the relay replies or the call times out; a resend after a reconnect is an event on it |
+| `relay.incoming` | a delivery is read | it is acked, or dropped |
+| `relay.connect` | the dial | connected or failed |
+
+Metrics keep bounded attributes, method, kind and outcome only, so a topic or an id never becomes a time series. Histogram points carry exemplars, so a slow bucket links back to a trace with the identifiers on it.
+
+| Metric | Type | What it measures |
+|---|---|---|
+| `walletconnect.request.duration` | histogram (s) | publishing a request to the peer's answer; `rpc.method`, `wc.method` for session requests, `wc.outcome` ok, peer_error, timeout, cancelled, error, publish_failed |
+| `walletconnect.relay.call.duration` | histogram (s) | writing a relay call to its reply; the relay confirms a publish only after the receiver acks, so this is delivery time |
+| `walletconnect.incoming.duration` | histogram (s) | reading a delivery to handling it; `wc.kind` is the protocol method or response |
+| `walletconnect.relay.connect.duration` | histogram (s) | dialing the relay to being connected |
+| `walletconnect.relay.reconnects` | counter | by `wc.reason`: connection_lost, ping_failed, send_failed, requested |
+| `walletconnect.incoming.dropped` | counter | by `wc.reason`: unknown_topic, undecryptable, invalid |
+| `walletconnect.request.timeouts` | counter | by `rpc.method`, requests and relay calls alike |
+| `walletconnect.relay.connected` | up/down counter | open relay connections |
+
+The SDK depends only on the OpenTelemetry API packages. Exporters, samplers and the SDK itself stay with the application; a typical setup exports over OTLP to a collector:
+
+```go
+exp, _ := otlptracehttp.New(ctx) // reads OTEL_EXPORTER_OTLP_ENDPOINT
+tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(exp), sdktrace.WithResource(res))
+otel.SetTracerProvider(tp)
+```
+
 ## Storage
 
 All state goes through `storage.KV`, a small transactional key-value interface. Two implementations ship with the SDK:

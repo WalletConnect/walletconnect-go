@@ -205,7 +205,7 @@ func TestOnDeleteRemovesSession(t *testing.T) {
 	h := newHarness(t)
 	topic, symHex := h.seedSession(false)
 	h.deliver(topic, symHex, request(jsonrpc.PayloadID(), methodEvent, chainChanged("eip155:1")))
-	ch := h.e.addWaiter(h.ctx(), jsonrpc.PayloadID(), topic)
+	ch := h.e.addWaiter(h.ctx(), jsonrpc.PayloadID(), topic, "wc_sessionRequest", "")
 
 	h.deliver(topic, symHex, request(jsonrpc.PayloadID(), methodDelete, jsonrpc.Error{Code: 6000, Message: "User disconnected."}))
 

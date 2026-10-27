@@ -21,7 +21,7 @@ func (h *harness) sweep() {
 func TestSweepExpiresDAppProposal(t *testing.T) {
 	h := newHarness(t)
 	pairingTopic, _, id, _ := h.seedDAppProposal()
-	ch := h.e.addWaiter(h.ctx(), id, pairingTopic)
+	ch := h.e.addWaiter(h.ctx(), id, pairingTopic, "wc_sessionRequest", "")
 	h.sweep()
 	if h.proposal(id) == nil {
 		t.Fatal("live proposal swept")
@@ -77,7 +77,7 @@ func TestSweepExpiresSession(t *testing.T) {
 	h := newHarness(t)
 	topic, symHex := h.seedSession(false)
 	h.deliver(topic, symHex, request(jsonrpc.PayloadID(), methodEvent, chainChanged("eip155:1")))
-	ch := h.e.addWaiter(h.ctx(), jsonrpc.PayloadID(), topic)
+	ch := h.e.addWaiter(h.ctx(), jsonrpc.PayloadID(), topic, "wc_sessionRequest", "")
 
 	h.clock.advance((sevenDays + 1) * time.Second)
 	h.sweep()
