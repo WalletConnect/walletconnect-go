@@ -18,11 +18,18 @@ go run ./dapp              # http://localhost:8080
 go run ./wallet            # http://localhost:8081, in another terminal
 ```
 
-Flags: `-addr` for the listen address, `-data` for the state directory, `-relay` for the relay URL, and `-url` for the public URL sent to peers in the app metadata.
+Flags: `-addr` for the listen address, `-data` for the state directory, `-relay` for the relay URL, `-url` for the public URL sent to peers in the app metadata, and `-debug` to log a trace line for every step of every action.
 
 ## State and restarts
 
 Each app keeps its sessions in `data/<app>/walletconnect.db`, a bbolt file. Stop and start an app to test resuming. The wallet also keeps its test private key in `data/wallet/key.hex`. It is a throwaway key for testing; never send funds to it. Delete the `data` directory to start fresh.
+
+The SDK writes every span to `data/<app>/walletconnect.trace.jsonl`. `GET /api/trace` downloads it, with its rotated history, as one file:
+
+```sh
+curl -o dapp.trace.jsonl http://localhost:8080/api/trace
+go run github.com/WalletConnect/walletconnect-go/cmd/wctrace summary dapp.trace.jsonl
+```
 
 ## Deploy to Cloud Run
 
@@ -46,7 +53,7 @@ gcloud builds submit --region europe-west1 --config examples/web/cloudbuild.yaml
 
 for app in dapp wallet; do
   gcloud run deploy wc-$app --region europe-west1 --image $IMAGE --command /app/wc-$app \
-    --args="-addr=:8080,-data=/tmp/wc-$app,-url=https://wc-$app-$NUMBER.europe-west1.run.app" \
+    --args="-addr=:8080,-data=/tmp/wc-$app,-url=https://wc-$app-$NUMBER.europe-west1.run.app,-debug" \
     --set-env-vars WC_PROJECT_ID=... \
     --max-instances 1 --timeout 3600 --cpu 1 --memory 256Mi --allow-unauthenticated
 done
@@ -59,6 +66,7 @@ Things to know:
 - Each app keeps its state in memory, so it is capped at one instance.
 - An open page holds a request, which keeps the instance running and connected to the relay. With no page open, Cloud Run stops the instance, and the next visit starts with no sessions and a new wallet key.
 - The one-hour timeout bounds the event stream. The page reconnects when it ends.
+- With `-debug` the trace lines go to Cloud Logging, which keeps them after the instance stops. The trace file at `/api/trace` is in memory and goes with the instance.
 - The wallet has no auth. Anyone with its URL can approve sessions and sign with its key.
 
 ## Not covered

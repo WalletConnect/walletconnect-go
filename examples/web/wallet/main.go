@@ -50,6 +50,7 @@ func main() {
 
 	page, _ := fs.Sub(static, "static")
 	srv := server.New(page, app.Log)
+	srv.ServeTrace(app.TraceFile)
 	registerAPI(srv, app.Client, signer)
 	go srv.PumpEvents(app.Ctx, app.Client.Events())
 	if err := server.Serve(app, *addr, srv); err != nil {
