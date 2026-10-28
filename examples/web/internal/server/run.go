@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	wc "github.com/WalletConnect/walletconnect-go"
@@ -49,7 +50,7 @@ func Start(cfg Config) (*App, func(), error) {
 		return nil, nil, err
 	}
 	traceFile := filepath.Join(cfg.DataDir, "walletconnect.trace.jsonl")
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	client, err := wc.New(ctx, wc.Options{
 		ProjectID: os.Getenv("WC_PROJECT_ID"),
 		RelayURL:  cfg.RelayURL,
