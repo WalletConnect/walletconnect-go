@@ -316,7 +316,7 @@ func relayMs(s *tracefile.Span) *int64 {
 func relayConnectMs(s *tracefile.Span) *int64 {
 	var out *int64
 	for _, e := range s.Events {
-		if e.Name != "relay send" {
+		if e.Name != "relay waited" {
 			continue
 		}
 		ms, err := strconv.ParseInt(e.Attr(trace.AttrRelayWaitedMs), 10, 64)

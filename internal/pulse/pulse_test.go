@@ -157,7 +157,9 @@ func TestSplitsRelayAndPeerTime(t *testing.T) {
 	r := newReporter(t, s, Options{})
 	r.Export(timed("walletconnect.request", "relay send", 1, "relay reply", 26, "request published", 26, "peer answered", 2151))
 	connect := timed("walletconnect.connect", "relay send", 130, "relay reply", 170, "relay send", 171, "relay reply", 230, "proposal published", 230)
-	connect.Events[0].Attributes = append(connect.Events[0].Attributes, tracefile.Attribute{Key: trace.AttrRelayWaitedMs, Value: int64(128)})
+	waited := tracefile.Event{Name: "relay waited", Time: t0.Add(130 * time.Millisecond),
+		Attributes: []tracefile.Attribute{{Key: trace.AttrRelayWaitedMs, Value: int64(128)}}}
+	connect.Events = append([]tracefile.Event{waited}, connect.Events...)
 	r.Export(connect)
 	r.Export(failed(span("walletconnect.pair", nil), "expired"))
 	r.Close()

@@ -38,7 +38,7 @@ type call struct {
 
 	id        int64
 	frame     []byte
-	queued    time.Time   // handed to the runner
+	queued    time.Time   // handed to the runner; zero once it reached a socket
 	firstSent time.Time   // first write, on any connection
 	sentAt    time.Time   // latest write
 	span      *trace.Span // OpenTelemetry span from first write to reply
@@ -75,6 +75,12 @@ func (r *runner) send(ctx context.Context, cl *call) bool {
 		r.finish(cl, nil, err)
 		return true
 	}
+	if !cl.queued.IsZero() && cl.queued.Before(r.connectedAt) {
+		// The call waited for this socket, whether it is sent or answered
+		// locally below.
+		trace.From(cl.ctx).Step("relay waited", "waitedMs", r.connectedAt.Sub(cl.queued).Milliseconds())
+	}
+	cl.queued = time.Time{}
 	switch cl.op {
 	case opSubscribe:
 		if !r.claimSubscribe(cl) {
@@ -100,10 +106,6 @@ func (r *runner) send(ctx context.Context, cl *call) bool {
 	}
 	cl.sentAt = time.Now()
 	attrs := append([]any{"method", cl.method, "relayId", cl.id, "socket", r.gen}, describeParams(cl.params)...)
-	if cl.firstSent.IsZero() && !cl.queued.IsZero() && cl.queued.Before(r.connectedAt) {
-		// The call waited for this socket to connect.
-		attrs = append(attrs, "waitedMs", r.connectedAt.Sub(cl.queued).Milliseconds())
-	}
 	if cl.firstSent.IsZero() {
 		cl.firstSent = cl.sentAt
 		cl.span, _ = r.c.cfg.Tracer.Child(cl.ctx, cl.spanName(), attrs...)

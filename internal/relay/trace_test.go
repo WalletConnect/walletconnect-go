@@ -107,39 +107,60 @@ func (s *spanSink) Export(sp *tracefile.Span) error {
 	return nil
 }
 
-// A call made before the socket is up records how long it waited for it on
-// its first relay send; a call on a live socket records no wait.
-func TestLiveSendRecordsConnectionWait(t *testing.T) {
+// A call made before the socket is up records how long it waited for it,
+// also when the runner answers it locally, as a subscribe to a topic the
+// reconnect already subscribed; a call on a live socket records no wait.
+func TestLiveRecordsConnectionWait(t *testing.T) {
 	url, project := testenv.Relay(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	sink := &spanSink{}
-	tr := trace.New(trace.Options{Exporter: sink})
-	_, priv, _ := ed25519.GenerateKey(rand.Reader)
-	c := New(Config{URL: url, ProjectID: project, UserAgent: "wc-2/go-test/test/test", Key: priv, Tracer: tr,
-		Topics: func(context.Context) ([]string, error) { return nil, nil }, Deliver: func(Incoming) {}, Logger: testLogger()})
-	go c.Run(ctx)
+	stored := randomTopic(t)
+	newClient := func(sink *spanSink) (*Client, *trace.Tracer) {
+		tr := trace.New(trace.Options{Exporter: sink})
+		_, priv, _ := ed25519.GenerateKey(rand.Reader)
+		c := New(Config{URL: url, ProjectID: project, UserAgent: "wc-2/go-test/test/test", Key: priv, Tracer: tr,
+			Topics: func(context.Context) ([]string, error) { return []string{stored}, nil }, Deliver: func(Incoming) {}, Logger: testLogger()})
+		go c.Run(ctx)
+		return c, tr
+	}
+	waits := func(sink *spanSink) []string {
+		sink.mu.Lock()
+		defer sink.mu.Unlock()
+		var out []string
+		for _, s := range sink.spans {
+			if s.Name != "walletconnect.action" {
+				continue
+			}
+			w := ""
+			for _, e := range s.Events {
+				if e.Name == "relay waited" {
+					w = e.Attr(trace.AttrRelayWaitedMs)
+				}
+			}
+			out = append(out, w)
+		}
+		return out
+	}
 
+	sent := &spanSink{}
+	c, tr := newClient(sent)
 	for range 2 {
-		span, sctx := tr.Start(ctx, "request")
+		span, sctx := tr.Start(ctx, "action")
 		publish(t, sctx, c, randomTopic(t), randomMessage(t))
 		span.End(nil)
 	}
-
-	sink.mu.Lock()
-	defer sink.mu.Unlock()
-	var waits []string
-	for _, s := range sink.spans {
-		if s.Name != "walletconnect.request" {
-			continue
-		}
-		for _, e := range s.Events {
-			if e.Name == "relay send" {
-				waits = append(waits, e.Attr(trace.AttrRelayWaitedMs))
-			}
-		}
+	if w := waits(sent); len(w) != 2 || w[0] == "" || w[1] != "" {
+		t.Fatalf("publish waits %q, want one on the first call only", w)
 	}
-	if len(waits) != 2 || waits[0] == "" || waits[1] != "" {
-		t.Fatalf("waits %q, want one on the first send only", waits)
+
+	local := &spanSink{}
+	c, tr = newClient(local)
+	span, sctx := tr.Start(ctx, "action")
+	if err := c.Subscribe(sctx, stored); err != nil {
+		t.Fatal(err)
+	}
+	span.End(nil)
+	if w := waits(local); len(w) != 1 || w[0] == "" {
+		t.Fatalf("subscribe waits %q, want the wait for the connection", w)
 	}
 }
