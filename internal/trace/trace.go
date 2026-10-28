@@ -441,6 +441,7 @@ const (
 	AttrOutcome        = "wc.outcome"
 	AttrReason         = "wc.reason"
 	AttrRelayID        = "relay.id"
+	AttrRelayWaitedMs  = "relay.waited_ms"
 	AttrRelayMethod    = "rpc.method"
 	AttrRelayTag       = "relay.tag"
 	AttrRelaySocket    = "relay.socket"
@@ -468,6 +469,7 @@ var attrKeys = map[string]string{
 	"resubscribe":    "relay.resubscribe",
 	"attempt":        "relay.attempt",
 	"took":           "relay.took",
+	"waitedMs":       AttrRelayWaitedMs,
 	"relayError":     "relay.error",
 	"acks":           "relay.acks",
 	"queued":         "relay.queued",

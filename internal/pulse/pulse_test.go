@@ -149,13 +149,16 @@ func timed(name string, steps ...any) *tracefile.Span {
 	return s
 }
 
-// relay_ms and peer_ms split an action's duration, so a slow relay is not
-// hidden behind a user taking minutes to approve.
+// relay_ms, relay_connect_ms and peer_ms split an action's duration, so a
+// slow relay or a slow connection is not hidden behind a user taking minutes
+// to approve.
 func TestSplitsRelayAndPeerTime(t *testing.T) {
 	s := newServer(t)
 	r := newReporter(t, s, Options{})
 	r.Export(timed("walletconnect.request", "relay send", 1, "relay reply", 26, "request published", 26, "peer answered", 2151))
-	r.Export(timed("walletconnect.connect", "relay send", 0, "relay reply", 40, "relay send", 41, "relay reply", 100, "proposal published", 100))
+	connect := timed("walletconnect.connect", "relay send", 130, "relay reply", 170, "relay send", 171, "relay reply", 230, "proposal published", 230)
+	connect.Events[0].Attributes = append(connect.Events[0].Attributes, tracefile.Attribute{Key: trace.AttrRelayWaitedMs, Value: int64(128)})
+	r.Export(connect)
 	r.Export(failed(span("walletconnect.pair", nil), "expired"))
 	r.Close()
 
@@ -166,13 +169,13 @@ func TestSplitsRelayAndPeerTime(t *testing.T) {
 		}
 		return *p
 	}
-	for i, want := range [][2]any{{int64(25), int64(2125)}, {int64(99), nil}, {nil, nil}} {
+	for i, want := range [][3]any{{int64(25), nil, int64(2125)}, {int64(99), int64(128), nil}, {nil, nil, nil}} {
 		p := evs[i].Props.Properties
-		if ms(p.RelayMs) != want[0] || ms(p.PeerMs) != want[1] {
-			t.Errorf("%s: relay_ms=%v peer_ms=%v, want %v %v", p.Action, ms(p.RelayMs), ms(p.PeerMs), want[0], want[1])
+		if got := [3]any{ms(p.RelayMs), ms(p.RelayConnectMs), ms(p.PeerMs)}; got != want {
+			t.Errorf("%s: relay_ms, relay_connect_ms, peer_ms = %v, want %v", p.Action, got, want)
 		}
 	}
-	if strings.Count(s.bodies[0], `"relay_ms"`) != 2 || strings.Count(s.bodies[0], `"peer_ms"`) != 1 {
+	if strings.Count(s.bodies[0], `"relay_ms"`) != 2 || strings.Count(s.bodies[0], `"relay_connect_ms"`) != 1 || strings.Count(s.bodies[0], `"peer_ms"`) != 1 {
 		t.Fatalf("absent times must be left out, not sent as 0: %s", s.bodies[0])
 	}
 }

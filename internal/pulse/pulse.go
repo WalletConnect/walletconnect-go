@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -84,6 +85,9 @@ type Properties struct {
 	// RelayMs is the time spent on relay round trips, from each send to its
 	// reply; nil when the action made no relay call.
 	RelayMs *int64 `json:"relay_ms,omitempty"`
+	// RelayConnectMs is how long the action waited for a relay connection
+	// before its first send; nil when the socket was already up.
+	RelayConnectMs *int64 `json:"relay_connect_ms,omitempty"`
 	// PeerMs is the wait for the peer's answer, from the last relay reply
 	// before it; nil when the action does not wait for the peer.
 	PeerMs *int64 `json:"peer_ms,omitempty"`
@@ -154,7 +158,7 @@ func (r *Reporter) Export(s *tracefile.Span) error {
 	ev := Event{EventID: uuid(), BundleID: r.o.ProjectID, Timestamp: s.End.UnixMilli(), Domain: r.o.Domain,
 		Props: Props{Event: "TRACE", Type: action, Properties: Properties{
 			Topic: topic(s), Trace: steps(s), Action: action, DurationMs: s.Duration().Milliseconds(),
-			RelayMs: relayMs(s), PeerMs: peerMs(s)}}}
+			RelayMs: relayMs(s), RelayConnectMs: relayConnectMs(s), PeerMs: peerMs(s)}}}
 	if s.Status.Code == tracefile.StatusError {
 		ev.Props.Event = "ERROR"
 		ev.Props.Type = s.Attr(trace.AttrErrorType)
@@ -305,6 +309,22 @@ func relayMs(s *tracefile.Span) *int64 {
 	}
 	ms := total.Milliseconds()
 	return &ms
+}
+
+// relayConnectMs is the longest wait of the action's relay calls; calls
+// queued together wait for the same connection.
+func relayConnectMs(s *tracefile.Span) *int64 {
+	var out *int64
+	for _, e := range s.Events {
+		if e.Name != "relay send" {
+			continue
+		}
+		ms, err := strconv.ParseInt(e.Attr(trace.AttrRelayWaitedMs), 10, 64)
+		if err == nil && (out == nil || ms > *out) {
+			out = &ms
+		}
+	}
+	return out
 }
 
 func peerMs(s *tracefile.Span) *int64 {

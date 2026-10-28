@@ -105,6 +105,7 @@ func (r *runner) connecting(ctx context.Context) state {
 	conn.SetReadLimit(maxMessageSize)
 
 	r.gen++
+	r.connectedAt = time.Now()
 	// The read context is separate from ctx: coder/websocket closes the
 	// socket when a read's context ends, and Close still needs the socket
 	// to flush acks (see drain).

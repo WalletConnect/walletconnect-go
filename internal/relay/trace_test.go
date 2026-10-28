@@ -2,14 +2,19 @@ package relay
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"io"
 	"log/slog"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/WalletConnect/walletconnect-go/internal/testenv"
 	"github.com/WalletConnect/walletconnect-go/internal/trace"
 	"github.com/WalletConnect/walletconnect-go/internal/types"
+	"github.com/WalletConnect/walletconnect-go/tracefile"
 	"go.opentelemetry.io/otel/codes"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
@@ -88,4 +93,53 @@ func attrOf(s tracetest.SpanStub, key string) string {
 		}
 	}
 	return ""
+}
+
+type spanSink struct {
+	mu    sync.Mutex
+	spans []*tracefile.Span
+}
+
+func (s *spanSink) Export(sp *tracefile.Span) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.spans = append(s.spans, sp)
+	return nil
+}
+
+// A call made before the socket is up records how long it waited for it on
+// its first relay send; a call on a live socket records no wait.
+func TestLiveSendRecordsConnectionWait(t *testing.T) {
+	url, project := testenv.Relay(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	sink := &spanSink{}
+	tr := trace.New(trace.Options{Exporter: sink})
+	_, priv, _ := ed25519.GenerateKey(rand.Reader)
+	c := New(Config{URL: url, ProjectID: project, UserAgent: "wc-2/go-test/test/test", Key: priv, Tracer: tr,
+		Topics: func(context.Context) ([]string, error) { return nil, nil }, Deliver: func(Incoming) {}, Logger: testLogger()})
+	go c.Run(ctx)
+
+	for range 2 {
+		span, sctx := tr.Start(ctx, "request")
+		publish(t, sctx, c, randomTopic(t), randomMessage(t))
+		span.End(nil)
+	}
+
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	var waits []string
+	for _, s := range sink.spans {
+		if s.Name != "walletconnect.request" {
+			continue
+		}
+		for _, e := range s.Events {
+			if e.Name == "relay send" {
+				waits = append(waits, e.Attr(trace.AttrRelayWaitedMs))
+			}
+		}
+	}
+	if len(waits) != 2 || waits[0] == "" || waits[1] != "" {
+		t.Fatalf("waits %q, want one on the first send only", waits)
+	}
 }

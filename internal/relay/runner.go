@@ -27,14 +27,15 @@ type runner struct {
 	unsent  []*call         // waiting for a connection
 	attempt int
 
-	conn       *websocket.Conn
-	cancelConn context.CancelFunc
-	gen        uint64
-	frames     chan frame
-	pings      chan pingResult
-	probing    bool
-	lastRead   time.Time       // latest frame or ping answer on this socket
-	subs       map[string]bool // topics subscribed on this socket
+	conn        *websocket.Conn
+	cancelConn  context.CancelFunc
+	gen         uint64
+	frames      chan frame
+	pings       chan pingResult
+	probing     bool
+	lastRead    time.Time       // latest frame or ping answer on this socket
+	connectedAt time.Time       // when this socket connected
+	subs        map[string]bool // topics subscribed on this socket
 }
 
 func (r *runner) run(ctx context.Context) {

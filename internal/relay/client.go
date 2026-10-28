@@ -188,6 +188,7 @@ func (c *Client) enqueue(ctx context.Context, cl *call, priority bool) {
 }
 
 func (c *Client) submit(ctx context.Context, ch chan *call, cl *call) error {
+	cl.queued = time.Now()
 	select {
 	case ch <- cl:
 		return nil
