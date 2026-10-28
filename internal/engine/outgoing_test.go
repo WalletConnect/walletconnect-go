@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -186,6 +187,9 @@ func TestApproveRollsBackWhenRelayFails(t *testing.T) {
 	}
 	if h.relay.unsubscribed(pairingTopic) != 1 {
 		t.Fatal("pairing topic not unsubscribed")
+	}
+	if !slices.Equal(h.relay.serverSubs, []string{approval.Session.Topic}) {
+		t.Fatalf("relay subscribed %v, want the session topic", h.relay.serverSubs)
 	}
 }
 

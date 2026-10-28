@@ -23,13 +23,14 @@ import (
 // fakeRelay records what the engine sends and answers requests with true,
 // or with the error set for that method.
 type fakeRelay struct {
-	mu        sync.Mutex
-	requests  []relayCall // Request and Enqueue
-	subs      []string
-	asyncSubs []string
-	unsubs    []string
-	acks      []relay.Incoming
-	fail      map[string]error // method -> error; "irn_subscribe" covers Subscribe
+	mu         sync.Mutex
+	requests   []relayCall // Request, RequestSubscribing and Enqueue
+	serverSubs []string    // topics RequestSubscribing names
+	subs       []string
+	asyncSubs  []string
+	unsubs     []string
+	acks       []relay.Incoming
+	fail       map[string]error // method -> error; "irn_subscribe" covers Subscribe
 }
 
 type relayCall struct {
@@ -45,6 +46,16 @@ func (f *fakeRelay) Request(_ context.Context, method string, params any) (json.
 		return nil, err
 	}
 	return json.RawMessage("true"), nil
+}
+
+func (f *fakeRelay) RequestSubscribing(ctx context.Context, method string, params any, topic string) (json.RawMessage, error) {
+	raw, err := f.Request(ctx, method, params)
+	if err == nil {
+		f.mu.Lock()
+		f.serverSubs = append(f.serverSubs, topic)
+		f.mu.Unlock()
+	}
+	return raw, err
 }
 
 func (f *fakeRelay) Enqueue(_ context.Context, method string, params any, _ bool) {

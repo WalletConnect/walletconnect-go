@@ -1,11 +1,15 @@
 package walletconnect
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/WalletConnect/walletconnect-go/internal/uri"
 	"github.com/WalletConnect/walletconnect-go/storage"
 	"github.com/WalletConnect/walletconnect-go/tracefile"
 )
@@ -65,6 +69,39 @@ func TestTraceFileBesideDatabase(t *testing.T) {
 	if c.traceFile.Export(&tracefile.Span{}) == nil {
 		t.Fatal("the trace file should be closed with the client")
 	}
+}
+
+// A pair span names its pairing topic, even when the pair fails, so the
+// trace and telemetry can be tied to the pairing; the URI itself never is.
+func TestTraceFilePairTopic(t *testing.T) {
+	dir := t.TempDir()
+	c := newTraceClient(t, Options{Storage: openBolt(t, dir)})
+	link := pairingURI(t, 2, 1)
+	p, _ := uri.Parse(link)
+	if err := c.Pair(context.Background(), link); !errors.Is(err, ErrExpired) {
+		t.Fatalf("err = %v, want ErrExpired", err)
+	}
+	c.Close()
+
+	data, err := os.ReadFile(filepath.Join(dir, "wallet.trace.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), p.SymKey) {
+		t.Fatal("trace file holds the symKey")
+	}
+	for s, err := range tracefile.Read(bytes.NewReader(data)) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s.Name == "walletconnect.pair" {
+			if got := s.Attr("wc.pairing_topic"); got != p.Topic {
+				t.Fatalf("pairing topic = %q, want %q", got, p.Topic)
+			}
+			return
+		}
+	}
+	t.Fatal("no pair span")
 }
 
 func TestTraceFileOptions(t *testing.T) {
