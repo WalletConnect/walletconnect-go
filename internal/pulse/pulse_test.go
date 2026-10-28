@@ -135,6 +135,48 @@ func TestReportsAPIActionsOnly(t *testing.T) {
 	}
 }
 
+// timed builds a span from steps at their offsets in milliseconds. Relay
+// steps come in send, reply pairs, and each pair shares a relay id.
+func timed(name string, steps ...any) *tracefile.Span {
+	s := span(name, nil)
+	for i := 0; i < len(steps); i += 2 {
+		e := tracefile.Event{Name: steps[i].(string), Time: t0.Add(time.Duration(steps[i+1].(int)) * time.Millisecond)}
+		if strings.HasPrefix(e.Name, "relay ") {
+			e.Attributes = []tracefile.Attribute{{Key: trace.AttrRelayID, Value: int64(i/4 + 1)}}
+		}
+		s.Events = append(s.Events, e)
+	}
+	return s
+}
+
+// relay_ms and peer_ms split an action's duration, so a slow relay is not
+// hidden behind a user taking minutes to approve.
+func TestSplitsRelayAndPeerTime(t *testing.T) {
+	s := newServer(t)
+	r := newReporter(t, s, Options{})
+	r.Export(timed("walletconnect.request", "relay send", 1, "relay reply", 26, "request published", 26, "peer answered", 2151))
+	r.Export(timed("walletconnect.connect", "relay send", 0, "relay reply", 40, "relay send", 41, "relay reply", 100, "proposal published", 100))
+	r.Export(failed(span("walletconnect.pair", nil), "expired"))
+	r.Close()
+
+	evs := s.events()
+	ms := func(p *int64) any {
+		if p == nil {
+			return nil
+		}
+		return *p
+	}
+	for i, want := range [][2]any{{int64(25), int64(2125)}, {int64(99), nil}, {nil, nil}} {
+		p := evs[i].Props.Properties
+		if ms(p.RelayMs) != want[0] || ms(p.PeerMs) != want[1] {
+			t.Errorf("%s: relay_ms=%v peer_ms=%v, want %v %v", p.Action, ms(p.RelayMs), ms(p.PeerMs), want[0], want[1])
+		}
+	}
+	if strings.Count(s.bodies[0], `"relay_ms"`) != 2 || strings.Count(s.bodies[0], `"peer_ms"`) != 1 {
+		t.Fatalf("absent times must be left out, not sent as 0: %s", s.bodies[0])
+	}
+}
+
 // Only the fixed fields leave the client: never other attributes or the
 // error message, which can quote a pairing URI.
 func TestSendsNothingElse(t *testing.T) {

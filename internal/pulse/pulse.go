@@ -81,6 +81,12 @@ type Properties struct {
 	Trace      []string `json:"trace"`
 	Action     string   `json:"action"`
 	DurationMs int64    `json:"duration_ms"`
+	// RelayMs is the time spent on relay round trips, from each send to its
+	// reply; nil when the action made no relay call.
+	RelayMs *int64 `json:"relay_ms,omitempty"`
+	// PeerMs is the wait for the peer's answer, from the last relay reply
+	// before it; nil when the action does not wait for the peer.
+	PeerMs *int64 `json:"peer_ms,omitempty"`
 }
 
 type Reporter struct {
@@ -147,7 +153,8 @@ func (r *Reporter) Export(s *tracefile.Span) error {
 	}
 	ev := Event{EventID: uuid(), BundleID: r.o.ProjectID, Timestamp: s.End.UnixMilli(), Domain: r.o.Domain,
 		Props: Props{Event: "TRACE", Type: action, Properties: Properties{
-			Topic: topic(s), Trace: steps(s), Action: action, DurationMs: s.Duration().Milliseconds()}}}
+			Topic: topic(s), Trace: steps(s), Action: action, DurationMs: s.Duration().Milliseconds(),
+			RelayMs: relayMs(s), PeerMs: peerMs(s)}}}
 	if s.Status.Code == tracefile.StatusError {
 		ev.Props.Event = "ERROR"
 		ev.Props.Type = s.Attr(trace.AttrErrorType)
@@ -275,6 +282,46 @@ func steps(s *tracefile.Span) []string {
 		out = append(out, strings.ReplaceAll(e.Name, " ", "_"))
 	}
 	return out
+}
+
+func relayMs(s *tracefile.Span) *int64 {
+	sent := map[string]time.Time{}
+	var total time.Duration
+	replied := false
+	for _, e := range s.Events {
+		id := e.Attr(trace.AttrRelayID)
+		switch e.Name {
+		case "relay send":
+			sent[id] = e.Time
+		case "relay reply":
+			if t, ok := sent[id]; ok {
+				total += e.Time.Sub(t)
+				replied = true
+			}
+		}
+	}
+	if !replied {
+		return nil
+	}
+	ms := total.Milliseconds()
+	return &ms
+}
+
+func peerMs(s *tracefile.Span) *int64 {
+	var published time.Time
+	for _, e := range s.Events {
+		switch e.Name {
+		case "relay reply":
+			published = e.Time
+		case "peer answered":
+			if published.IsZero() {
+				return nil
+			}
+			ms := e.Time.Sub(published).Milliseconds()
+			return &ms
+		}
+	}
+	return nil
 }
 
 func uuid() string {

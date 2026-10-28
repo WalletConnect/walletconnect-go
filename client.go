@@ -76,7 +76,8 @@ type Options struct {
 	// NoTelemetry stops reporting to WalletConnect's Pulse API, which the
 	// JS SDK reports to as well. Each API call is reported as one event
 	// when it ends: the action, its topic, the names of its steps, its
-	// duration and, if it failed, the error's type. No params, payloads,
+	// duration with the parts spent on the relay and waiting for the peer
+	// and, if it failed, the error's type. No params, payloads,
 	// keys, addresses or error messages are sent. Events are sent in
 	// batches every 30 seconds and on Close, with Metadata.URL's origin as
 	// the Origin header; Pulse accepts only the project's allowed domains,
