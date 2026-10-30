@@ -14,6 +14,8 @@ var bucket = []byte("walletconnect")
 // Bolt is a KV persisted to a single bbolt file.
 type Bolt struct{ db *bolt.DB }
 
+// OpenBolt opens or creates the bbolt database at path. A second process
+// opening the same file waits up to 5 seconds, then fails.
 func OpenBolt(path string) (*Bolt, error) {
 	db, err := bolt.Open(path, 0o600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
@@ -29,11 +31,13 @@ func OpenBolt(path string) (*Bolt, error) {
 	return &Bolt{db: db}, nil
 }
 
+// Close closes the database file.
 func (b *Bolt) Close() error { return b.db.Close() }
 
 // Path is the database file. The client puts its trace file beside it.
 func (b *Bolt) Path() string { return b.db.Path() }
 
+// View runs fn in a read-only transaction.
 func (b *Bolt) View(ctx context.Context, fn func(Tx) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -41,6 +45,7 @@ func (b *Bolt) View(ctx context.Context, fn func(Tx) error) error {
 	return b.db.View(func(tx *bolt.Tx) error { return fn(&boltTx{b: tx.Bucket(bucket)}) })
 }
 
+// Update runs fn in a read-write transaction committed only if fn returns nil.
 func (b *Bolt) Update(ctx context.Context, fn func(Tx) error) error {
 	if err := ctx.Err(); err != nil {
 		return err

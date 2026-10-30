@@ -14,10 +14,12 @@ type Memory struct {
 	data map[string][]byte
 }
 
+// NewMemory returns an empty in-memory KV.
 func NewMemory() *Memory { return &Memory{data: map[string][]byte{}} }
 
 var errReadOnly = errors.New("storage: write in read-only transaction")
 
+// View runs fn in a read-only transaction.
 func (m *Memory) View(ctx context.Context, fn func(Tx) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -27,6 +29,7 @@ func (m *Memory) View(ctx context.Context, fn func(Tx) error) error {
 	return fn(&memTx{base: m.data, readOnly: true})
 }
 
+// Update runs fn in a read-write transaction committed only if fn returns nil.
 func (m *Memory) Update(ctx context.Context, fn func(Tx) error) error {
 	if err := ctx.Err(); err != nil {
 		return err

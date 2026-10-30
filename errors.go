@@ -5,6 +5,8 @@ import (
 	"github.com/WalletConnect/walletconnect-go/internal/types"
 )
 
+// Errors returned by Client methods. Compare with errors.Is; a peer's own
+// error answer is an *RPCError instead.
 var (
 	ErrNotFound       = types.ErrNotFound
 	ErrExpired        = types.ErrExpired
@@ -20,6 +22,7 @@ var (
 // SDKErrorKey names an entry of the protocol error table.
 type SDKErrorKey = sdkerr.Key
 
+// Keys of the protocol error table, for SDKError.
 const (
 	ErrKeyUserRejected            = sdkerr.UserRejected
 	ErrKeyUserRejectedChains      = sdkerr.UserRejectedChains

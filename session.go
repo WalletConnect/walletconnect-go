@@ -24,10 +24,15 @@ func (c *Client) Disconnect(ctx context.Context, topic string) (err error) {
 	return c.engine.Disconnect(ctx, topic)
 }
 
+// Sessions lists the live sessions.
 func (c *Client) Sessions(ctx context.Context) ([]Session, error) { return c.engine.Sessions(ctx) }
 
+// PendingRequests lists the session requests this wallet has received and
+// not yet answered.
 func (c *Client) PendingRequests(ctx context.Context) ([]PendingRequest, error) {
 	return c.engine.PendingRequests(ctx)
 }
 
+// Proposals lists the pending session proposals: those this dApp sent and
+// those this wallet received.
 func (c *Client) Proposals(ctx context.Context) ([]Proposal, error) { return c.engine.Proposals(ctx) }

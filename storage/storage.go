@@ -10,8 +10,10 @@ import (
 	"errors"
 )
 
+// ErrNotFound is returned by Tx.Get for a missing key.
 var ErrNotFound = errors.New("storage: not found")
 
+// KV is the storage a Client keeps its state in.
 type KV interface {
 	// View runs fn in a read-only transaction.
 	View(ctx context.Context, fn func(Tx) error) error
@@ -19,6 +21,7 @@ type KV interface {
 	Update(ctx context.Context, fn func(Tx) error) error
 }
 
+// Tx is one transaction on a KV.
 type Tx interface {
 	// Get returns ErrNotFound when the key is missing. The returned slice is
 	// owned by the caller.
