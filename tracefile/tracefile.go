@@ -67,6 +67,9 @@ type Event struct {
 	Attributes []Attribute
 }
 
+// Attr returns the event attribute with the key as a string, or "".
+func (e *Event) Attr(key string) string { return attrString(e.Attributes, key) }
+
 // Link names another span this one belongs with, such as the incoming
 // message that answered a request.
 type Link struct {

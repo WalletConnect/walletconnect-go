@@ -31,8 +31,9 @@ func main() {
 	newClient := func(name string) *wc.Client {
 		c, err := wc.New(ctx, wc.Options{
 			ProjectID: os.Getenv("TEST_PROJECT_ID"), RelayURL: relayURL,
-			Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
-			Metadata: wc.Metadata{Name: "go-bench-" + name, Description: "bench", URL: "https://example.com"},
+			Logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+			Metadata:    wc.Metadata{Name: "go-bench-" + name, Description: "bench", URL: "https://example.com"},
+			NoTelemetry: true,
 		})
 		if err != nil {
 			log.Fatal(err)

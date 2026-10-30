@@ -2,14 +2,19 @@ package relay
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"io"
 	"log/slog"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/WalletConnect/walletconnect-go/internal/testenv"
 	"github.com/WalletConnect/walletconnect-go/internal/trace"
 	"github.com/WalletConnect/walletconnect-go/internal/types"
+	"github.com/WalletConnect/walletconnect-go/tracefile"
 	"go.opentelemetry.io/otel/codes"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
@@ -88,4 +93,74 @@ func attrOf(s tracetest.SpanStub, key string) string {
 		}
 	}
 	return ""
+}
+
+type spanSink struct {
+	mu    sync.Mutex
+	spans []*tracefile.Span
+}
+
+func (s *spanSink) Export(sp *tracefile.Span) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.spans = append(s.spans, sp)
+	return nil
+}
+
+// A call made before the socket is up records how long it waited for it,
+// also when the runner answers it locally, as a subscribe to a topic the
+// reconnect already subscribed; a call on a live socket records no wait.
+func TestLiveRecordsConnectionWait(t *testing.T) {
+	url, project := testenv.Relay(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	stored := randomTopic(t)
+	newClient := func(sink *spanSink) (*Client, *trace.Tracer) {
+		tr := trace.New(trace.Options{Exporter: sink})
+		_, priv, _ := ed25519.GenerateKey(rand.Reader)
+		c := New(Config{URL: url, ProjectID: project, UserAgent: "wc-2/go-test/test/test", Key: priv, Tracer: tr,
+			Topics: func(context.Context) ([]string, error) { return []string{stored}, nil }, Deliver: func(Incoming) {}, Logger: testLogger()})
+		go c.Run(ctx)
+		return c, tr
+	}
+	waits := func(sink *spanSink) []string {
+		sink.mu.Lock()
+		defer sink.mu.Unlock()
+		var out []string
+		for _, s := range sink.spans {
+			if s.Name != "walletconnect.action" {
+				continue
+			}
+			w := ""
+			for _, e := range s.Events {
+				if e.Name == "relay waited" {
+					w = e.Attr(trace.AttrRelayWaitedMs)
+				}
+			}
+			out = append(out, w)
+		}
+		return out
+	}
+
+	sent := &spanSink{}
+	c, tr := newClient(sent)
+	for range 2 {
+		span, sctx := tr.Start(ctx, "action")
+		publish(t, sctx, c, randomTopic(t), randomMessage(t))
+		span.End(nil)
+	}
+	if w := waits(sent); len(w) != 2 || w[0] == "" || w[1] != "" {
+		t.Fatalf("publish waits %q, want one on the first call only", w)
+	}
+
+	local := &spanSink{}
+	c, tr = newClient(local)
+	span, sctx := tr.Start(ctx, "action")
+	if err := c.Subscribe(sctx, stored); err != nil {
+		t.Fatal(err)
+	}
+	span.End(nil)
+	if w := waits(local); len(w) != 1 || w[0] == "" {
+		t.Fatalf("subscribe waits %q, want the wait for the connection", w)
+	}
 }

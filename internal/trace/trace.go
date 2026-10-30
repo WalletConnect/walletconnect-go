@@ -241,6 +241,9 @@ func (s *Span) End(err error, attrs ...any) {
 	if len(attrs) > 0 && (s.recording() || s.exporting()) {
 		kvs = kv(attrs)
 	}
+	if err != nil {
+		kvs = append(kvs, attribute.String(AttrErrorType, ErrorType(err)))
+	}
 	if s.recording() {
 		if len(kvs) > 0 {
 			s.sp.SetAttributes(kvs...)
@@ -438,6 +441,7 @@ const (
 	AttrOutcome        = "wc.outcome"
 	AttrReason         = "wc.reason"
 	AttrRelayID        = "relay.id"
+	AttrRelayWaitedMs  = "relay.waited_ms"
 	AttrRelayMethod    = "rpc.method"
 	AttrRelayTag       = "relay.tag"
 	AttrRelaySocket    = "relay.socket"
@@ -465,6 +469,7 @@ var attrKeys = map[string]string{
 	"resubscribe":    "relay.resubscribe",
 	"attempt":        "relay.attempt",
 	"took":           "relay.took",
+	"waitedMs":       AttrRelayWaitedMs,
 	"relayError":     "relay.error",
 	"acks":           "relay.acks",
 	"queued":         "relay.queued",

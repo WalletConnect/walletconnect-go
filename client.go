@@ -16,10 +16,12 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/WalletConnect/walletconnect-go/internal/crypto"
 	"github.com/WalletConnect/walletconnect-go/internal/engine"
+	"github.com/WalletConnect/walletconnect-go/internal/pulse"
 	"github.com/WalletConnect/walletconnect-go/internal/queue"
 	"github.com/WalletConnect/walletconnect-go/internal/relay"
 	"github.com/WalletConnect/walletconnect-go/internal/store"
@@ -71,13 +73,27 @@ type Options struct {
 	// TraceFileLimit is the most bytes the trace file and its two rotated
 	// predecessors keep on disk; default 30 MB.
 	TraceFileLimit int64
+	// NoTelemetry stops reporting to WalletConnect's Pulse API, which the
+	// JS SDK reports to as well. Each API call is reported as one event
+	// when it ends: the action, its topic, the names of its steps, its
+	// duration with the parts spent on the relay, waiting for a relay
+	// connection and waiting for the peer and, if it failed, the error's
+	// type. No params, payloads, keys, addresses or error messages are
+	// sent. Events are sent in
+	// batches every 30 seconds and on Close, with Metadata.URL's origin as
+	// the Origin header; Pulse accepts only the project's allowed domains,
+	// and without a Metadata.URL nothing is reported. Test binaries never
+	// report.
+	NoTelemetry bool
 
-	now func() time.Time // test hook for the protocol clock
+	now      func() time.Time // test hook for the protocol clock
+	pulseURL string           // test hook: report to this URL, even in tests
 }
 
 type Client struct {
 	tracer    *trace.Tracer
 	traceFile *tracefile.Writer // nil when off
+	pulse     *pulse.Reporter   // nil when off
 	engine    *engine.Engine
 	relay     *relay.Client
 	// Stopped in this order by Close, so acks for processed messages and
@@ -114,16 +130,26 @@ func New(ctx context.Context, opts Options) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	var exporter trace.Exporter
+	var exporters []trace.Exporter
 	if traceFile != nil {
-		exporter = traceFile
+		exporters = append(exporters, traceFile)
 	}
-	tracer := trace.New(trace.Options{Logger: opts.Logger, LogLines: opts.Trace, Exporter: exporter,
+	var reporter *pulse.Reporter
+	if !opts.NoTelemetry && (opts.pulseURL != "" || !testing.Testing()) {
+		reporter, err = pulse.New(pulse.Options{URL: opts.pulseURL, ProjectID: opts.ProjectID, Domain: opts.Metadata.URL,
+			Version: Version, Logger: opts.Logger})
+		if err != nil {
+			opts.Logger.Info("telemetry is off: Metadata.URL is not a URL", "url", opts.Metadata.URL)
+		} else {
+			exporters = append(exporters, reporter)
+		}
+	}
+	tracer := trace.New(trace.Options{Logger: opts.Logger, LogLines: opts.Trace, Exporter: trace.Exporters(exporters...),
 		TracerProvider: opts.TracerProvider, MeterProvider: opts.MeterProvider, Version: Version})
 	engineCtx, stopEngine := context.WithCancel(context.Background())
 	relayCtx, stopRelay := context.WithCancel(context.Background())
 	dispatchCtx, stopDispatch := context.WithCancel(context.Background())
-	c := &Client{tracer: tracer, traceFile: traceFile, stopEngine: stopEngine, stopRelay: stopRelay, stopDispatch: stopDispatch,
+	c := &Client{tracer: tracer, traceFile: traceFile, pulse: reporter, stopEngine: stopEngine, stopRelay: stopRelay, stopDispatch: stopDispatch,
 		events: make(chan Event, opts.EventBuffer), queue: queue.New[Event]()}
 	c.engine = engine.New(engine.Config{Store: st, Metadata: opts.Metadata, Logger: opts.Logger, Emit: c.queue.Push, Now: opts.now, Tracer: tracer})
 	c.relay = relay.New(relay.Config{
@@ -238,6 +264,9 @@ func (c *Client) Close() error {
 		c.stopDispatch()
 		c.wg.Wait()
 		close(c.events)
+		if c.pulse != nil {
+			c.pulse.Close()
+		}
 		if c.traceFile != nil {
 			c.traceFile.Close()
 		}
