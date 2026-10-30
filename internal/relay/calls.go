@@ -36,6 +36,8 @@ type call struct {
 	topics []string    // opBatchSubscribe
 	reply  chan result // nil for fire-and-forget
 
+	subscribes string // subscribed by the relay when the call succeeds, see RequestSubscribing
+
 	id        int64
 	frame     []byte
 	queued    time.Time   // handed to the runner; zero once it reached a socket

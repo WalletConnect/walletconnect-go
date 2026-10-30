@@ -172,7 +172,7 @@ func (e *Engine) Approve(ctx context.Context, p ApproveParams) (*Approval, error
 		"sessionProposalResponse": responseMsg, "sessionSettlementRequest": settleMsg, "ttl": fiveMinutes,
 	}
 	tnvForApprove(prop.ID, session).addTo(approveParams)
-	if _, err := e.relay.Request(ctx, "wc_approveSession", approveParams); err != nil {
+	if _, err := e.relay.RequestSubscribing(ctx, "wc_approveSession", approveParams, session.Topic); err != nil {
 		e.settle(e.removeWaiter(settleID), err, "publish_failed")
 		_ = e.store.Update(context.Background(), func(tx *store.Tx) error {
 			if err := tx.DeleteSession(session.Topic); err != nil {

@@ -133,6 +133,13 @@ func (c *Client) Request(ctx context.Context, method string, params any) (json.R
 	return c.do(ctx, &call{method: method, params: params})
 }
 
+// RequestSubscribing sends a relay request that subscribes this client to
+// topic on the relay's side, and waits for its result. The topic then counts
+// as subscribed on the current socket, so Unsubscribe drops it.
+func (c *Client) RequestSubscribing(ctx context.Context, method string, params any, topic string) (json.RawMessage, error) {
+	return c.do(ctx, &call{method: method, params: params, subscribes: topic})
+}
+
 // Enqueue sends a relay request without waiting. Failures are logged. ctx
 // only carries the trace: cancelling it does not stop the send.
 func (c *Client) Enqueue(ctx context.Context, method string, params any, priority bool) {

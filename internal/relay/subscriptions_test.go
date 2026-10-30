@@ -2,8 +2,11 @@ package relay
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
+
+	"github.com/WalletConnect/walletconnect-go/internal/jsonrpc"
 )
 
 func topicsN(n int) []string {
@@ -81,5 +84,28 @@ func TestBatchSubscribeFailedForgetsOnlyThatBatch(t *testing.T) {
 	topics[0] = "mutated"
 	if calls[0].topics[0] == "mutated" {
 		t.Fatal("batch shares the caller's slice")
+	}
+}
+
+// wc_approveSession subscribes the wallet to the session topic on the relay's
+// side, so a disconnect must still send irn_unsubscribe for it.
+func TestRequestSubscribingCountsAsSubscribed(t *testing.T) {
+	for name, tc := range map[string]struct {
+		reply relayFrame
+		want  bool
+	}{
+		"ok":     {relayFrame{Result: json.RawMessage("true")}, true},
+		"failed": {relayFrame{Error: &jsonrpc.Error{Code: -32000, Message: "no"}}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := &runner{subs: map[string]bool{}, pending: map[int64]*call{}}
+			r.pending[1] = &call{ctx: context.Background(), method: "wc_approveSession", subscribes: "session", reply: make(chan result, 1)}
+			tc.reply.ID = json.RawMessage("1")
+			r.handleResponse(tc.reply)
+			unsub := &call{ctx: context.Background(), op: opUnsubscribe, topic: "session", reply: make(chan result, 1)}
+			if got := r.claimUnsubscribe(unsub); got != tc.want {
+				t.Fatalf("unsubscribe sent = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

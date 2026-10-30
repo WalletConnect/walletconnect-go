@@ -4,14 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/WalletConnect/walletconnect-go/internal/uri"
 )
 
 // Pair joins a pairing from a wc: URI. The proposal arrives as an
 // EventSessionProposal.
-func (c *Client) Pair(ctx context.Context, uri string) (err error) {
-	ctx, span := c.startTrace(ctx, "pair")
+func (c *Client) Pair(ctx context.Context, link string) (err error) {
+	var attrs []any
+	if p, perr := uri.Parse(link); perr == nil {
+		attrs = []any{"pairingTopic", p.Topic}
+	}
+	ctx, span := c.startTrace(ctx, "pair", attrs...)
 	defer func() { span.End(err) }()
-	return c.engine.Pair(ctx, uri)
+	return c.engine.Pair(ctx, link)
 }
 
 // Approve settles a session for a received proposal.

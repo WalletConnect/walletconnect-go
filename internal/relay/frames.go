@@ -92,6 +92,9 @@ func (r *runner) handleResponse(f relayFrame) {
 		r.finish(cl, nil, f.Error)
 		return
 	}
+	if cl.subscribes != "" {
+		r.subs[cl.subscribes] = true
+	}
 	r.finish(cl, f.Result, nil)
 }
 

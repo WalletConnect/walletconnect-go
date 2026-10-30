@@ -24,6 +24,7 @@ import (
 // Relay is the subset of the relay transport the engine uses.
 type Relay interface {
 	Request(ctx context.Context, method string, params any) (json.RawMessage, error)
+	RequestSubscribing(ctx context.Context, method string, params any, topic string) (json.RawMessage, error)
 	Enqueue(ctx context.Context, method string, params any, priority bool)
 	Ack(in relay.Incoming)
 	Subscribe(ctx context.Context, topic string) error
