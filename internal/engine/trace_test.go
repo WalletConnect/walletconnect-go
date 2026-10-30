@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/WalletConnect/walletconnect-go/internal/jsonrpc"
 	"github.com/WalletConnect/walletconnect-go/internal/trace"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -119,6 +120,40 @@ func TestRequestTracing(t *testing.T) {
 	}
 	if v, _ := inc.DataPoints[0].Attributes.Value(trace.AttrKind); v.AsString() != "response" {
 		t.Fatalf("incoming.duration attributes %v", inc.DataPoints[0].Attributes)
+	}
+}
+
+// A wallet rejecting a request is an answer, not a failure: Request returns
+// the rejection, but the request span and its answer span end as done.
+func TestRejectedRequestIsNotAFailure(t *testing.T) {
+	h := newHarness(t)
+	exp, _ := otelSinks(t, h)
+	topic, symHex := h.seedSession(false)
+	parent, ctx := h.e.tr.Start(context.Background(), "request", "topic", topic)
+	done := make(chan error)
+	go func() {
+		_, err := h.e.Request(ctx, RequestParams{Topic: topic, ChainID: "eip155:1", Method: "personal_sign"})
+		done <- err
+	}()
+	sent := h.awaitPublish(topic, symHex)
+	h.deliver(topic, symHex, rpcError(sent.ID, 5000))
+	err := <-done
+	var rpcErr *jsonrpc.Error
+	if !errors.As(err, &rpcErr) || rpcErr.Code != 5000 {
+		t.Fatalf("Request err = %v, want the rejection", err)
+	}
+	parent.End(err)
+
+	spans := map[string]tracetest.SpanStub{}
+	for _, s := range exp.GetSpans() {
+		spans[s.Name] = s
+	}
+	p, c := spans["walletconnect.request"], spans["wc.peer.answer"]
+	if p.Status.Code != codes.Ok || attrOf(p.Attributes, "wc.error_code") != "5000" {
+		t.Errorf("request status %+v attributes %v", p.Status, p.Attributes)
+	}
+	if c.Status.Code != codes.Ok || attrOf(c.Attributes, trace.AttrOutcome) != "peer_error" {
+		t.Errorf("answer status %+v attributes %v", c.Status, c.Attributes)
 	}
 }
 

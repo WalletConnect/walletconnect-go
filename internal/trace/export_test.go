@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -12,6 +13,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
+	"github.com/WalletConnect/walletconnect-go/internal/jsonrpc"
 	"github.com/WalletConnect/walletconnect-go/tracefile"
 )
 
@@ -131,6 +133,28 @@ func TestExportLateStep(t *testing.T) {
 	rec := exp.byName(t, "walletconnect.request")
 	if len(rec.Events) != 0 || len(rec.Links) != 0 {
 		t.Errorf("late step or link exported: %+v", rec)
+	}
+}
+
+// The peer's error answer ends the span as done with its code; the same kind
+// of error from elsewhere, such as the relay, still fails it.
+func TestAnsweredIsDone(t *testing.T) {
+	exp := &capture{}
+	tr := New(Options{Exporter: exp})
+	answered, _ := tr.Start(context.Background(), "request")
+	rejection := &jsonrpc.Error{Code: 5000, Message: "User rejected."}
+	answered.Answered(rejection)
+	answered.End(fmt.Errorf("wrapped: %w", rejection))
+	failed, _ := tr.Start(context.Background(), "ping")
+	failed.Answered(rejection)
+	failed.End(&jsonrpc.Error{Code: 5000, Message: "relay"})
+
+	a, f := exp.byName(t, "walletconnect.request"), exp.byName(t, "walletconnect.ping")
+	if a.Status.Code != tracefile.StatusOK || attrOf(a.Attributes, "wc.error_code") != int64(5000) {
+		t.Errorf("answered span status %+v attributes %+v", a.Status, a.Attributes)
+	}
+	if f.Status.Code != tracefile.StatusError {
+		t.Errorf("failed span status %+v attributes %+v", f.Status, f.Attributes)
 	}
 }
 

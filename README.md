@@ -169,6 +169,8 @@ Spans carry the identifiers that match relay-side logs, untruncated: `wc.topic`,
 | `relay.incoming` | a delivery is read | it is acked, or dropped |
 | `relay.connect` | the dial | connected or failed |
 
+A span fails only when its action did. A peer's error answer, such as a wallet rejecting a request, is an answer: the API still returns it as `*RPCError`, but the action's span and `wc.peer.answer` end as ok, with the code in `wc.error_code`.
+
 Metrics keep bounded attributes, method, kind and outcome only, so a topic or an id never becomes a time series. Histogram points carry exemplars, so a slow bucket links back to a trace with the identifiers on it.
 
 | Metric | Type | What it measures |

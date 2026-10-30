@@ -80,7 +80,8 @@ func (e *Engine) resolve(ctx context.Context, id int64, r waitResult) {
 		e.settle(w, r.err, "error", "via", in.ID())
 	case r.rpcErr != nil:
 		attrs = append(attrs, "outcome", "peer error", "code", r.rpcErr.Code, "message", r.rpcErr.Message)
-		e.settle(w, r.rpcErr, "peer_error", "via", in.ID(), "code", r.rpcErr.Code)
+		w.span.Answered(r.rpcErr)
+		e.settle(w, nil, "peer_error", "via", in.ID(), "code", r.rpcErr.Code)
 	default:
 		attrs = append(attrs, "outcome", "ok")
 		e.settle(w, nil, "ok", "via", in.ID())

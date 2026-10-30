@@ -37,6 +37,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
+	"github.com/WalletConnect/walletconnect-go/internal/jsonrpc"
 	"github.com/WalletConnect/walletconnect-go/tracefile"
 )
 
@@ -99,8 +100,9 @@ type Span struct {
 	sp      oteltrace.Span // nil when OpenTelemetry tracing is off
 	quiet   bool           // a child span: exported only, no log lines
 
-	mu  sync.Mutex
-	rec *tracefile.Span // the record being built for the exporter; nil when off or after End
+	mu     sync.Mutex
+	rec    *tracefile.Span // the record being built for the exporter; nil when off or after End
+	answer *jsonrpc.Error  // the peer's error answer, see Answered
 }
 
 func (s *Span) recording() bool { return s.sp != nil && s.sp.IsRecording() }
@@ -226,12 +228,30 @@ func (s *Span) Step(step string, attrs ...any) {
 	s.mu.Unlock()
 }
 
+// Answered records err as the peer's answer to the action, such as a user
+// rejecting a request. The action did its part: when End gets this error,
+// the span ends as done, with the error's code, not as failed.
+func (s *Span) Answered(err *jsonrpc.Error) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.answer = err
+	s.mu.Unlock()
+}
+
 // End logs the outcome, "done" or "failed" with err, ends the OpenTelemetry
-// span with the matching status and exports the span.
+// span with the matching status and exports the span. The peer's error
+// answer (see Answered) is done.
 func (s *Span) End(err error, attrs ...any) {
 	if s == nil {
 		return
 	}
+	s.mu.Lock()
+	if s.answer != nil && errors.Is(err, s.answer) {
+		err, attrs = nil, append(attrs, "code", s.answer.Code)
+	}
+	s.mu.Unlock()
 	if err != nil {
 		s.emit("failed", err, attrs)
 	} else {
