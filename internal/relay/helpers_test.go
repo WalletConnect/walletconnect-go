@@ -152,17 +152,30 @@ func noMessage(t *testing.T, p *peer, msg string, d time.Duration) {
 	}
 }
 
-func waitConnected(t *testing.T, p *peer) {
+// reconnect drops p's socket and waits until a new one is up. States left
+// from earlier connections are discarded first, so the wait covers this
+// reconnect: the old socket is closed and the new one connected.
+func reconnect(t *testing.T, p *peer) {
+	t.Helper()
+	for len(p.states) > 0 {
+		<-p.states
+	}
+	p.Reconnect()
+	waitState(t, p, false)
+	waitState(t, p, true)
+}
+
+func waitState(t *testing.T, p *peer, want bool) {
 	t.Helper()
 	timeout := time.After(20 * time.Second)
 	for {
 		select {
 		case up := <-p.states:
-			if up {
+			if up == want {
 				return
 			}
 		case <-timeout:
-			t.Fatal("timed out waiting for reconnect")
+			t.Fatalf("timed out waiting for connected=%v", want)
 		}
 	}
 }

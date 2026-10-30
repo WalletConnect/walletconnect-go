@@ -44,8 +44,7 @@ func TestLiveMailboxAndAck(t *testing.T) {
 	}
 
 	// Unacked: delivered again on the new connection.
-	b.Reconnect()
-	waitConnected(t, b)
+	reconnect(t, b)
 	got := drainMessage(b, msg, 3*time.Second)
 	if len(got) == 0 {
 		t.Fatal("unacked message not redelivered after reconnect")
@@ -55,8 +54,7 @@ func TestLiveMailboxAndAck(t *testing.T) {
 	latest := got[len(got)-1]
 	b.Ack(latest)
 	time.Sleep(time.Second)
-	b.Reconnect()
-	waitConnected(t, b)
+	reconnect(t, b)
 	noMessage(t, b, msg, 5*time.Second)
 }
 
@@ -68,8 +66,7 @@ func TestLiveReconnectResubscribesAndResends(t *testing.T) {
 	topic := randomTopic(t)
 	b.subscribe(t, ctx, topic)
 
-	b.Reconnect()
-	waitConnected(t, b)
+	reconnect(t, b)
 	msg := randomMessage(t)
 	publish(t, ctx, a.Client, topic, msg)
 	recvMessage(t, b, msg)
