@@ -55,7 +55,7 @@ for app in dapp wallet; do
   gcloud run deploy wc-$app --region europe-west1 --image $IMAGE --command /app/wc-$app \
     --args="-addr=:8080,-data=/tmp/wc-$app,-url=https://wc-$app-$NUMBER.europe-west1.run.app,-debug" \
     --set-env-vars WC_PROJECT_ID=... \
-    --max-instances 1 --timeout 3600 --cpu 1 --memory 256Mi --allow-unauthenticated
+    --max-instances 1 --concurrency 1000 --timeout 3600 --cpu 1 --memory 256Mi --allow-unauthenticated
 done
 ```
 
@@ -65,7 +65,7 @@ Things to know:
 
 - Each app keeps its state in memory, so it is capped at one instance.
 - An open page holds a request, which keeps the instance running and connected to the relay. With no page open, Cloud Run stops the instance, and the next visit starts with no sessions and a new wallet key.
-- The one-hour timeout bounds the event stream. The page reconnects when it ends.
+- The server ends each event stream after 5 minutes and the page reopens it. Cloud Run does not tell the server when a page closes, so an open-ended stream would hold a request slot for the full one-hour timeout; closed tabs would pile up until they used every slot.
 - With `-debug` the trace lines go to Cloud Logging, which keeps them after the instance stops. The trace file at `/api/trace` is in memory and goes with the instance.
 - The wallet has no auth. Anyone with its URL can approve sessions and sign with its key.
 

@@ -164,6 +164,9 @@ func registerAPI(srv *server.Server, c *wc.Client, signer *evm.Signer) {
 		if err != nil {
 			return nil, err
 		}
+		if _, err := findSession(r.Context(), c, in.Topic); err != nil {
+			return nil, err
+		}
 		srv.Async("ping_result", map[string]any{"topic": in.Topic}, func() (any, error) { return "pong", c.Ping(bg, in.Topic) })
 		return map[string]bool{"sent": true}, nil
 	})
@@ -226,6 +229,9 @@ func findRequest(ctx context.Context, c *wc.Client, id int64) (wc.PendingRequest
 }
 
 func findSession(ctx context.Context, c *wc.Client, topic string) (wc.Session, error) {
+	if topic == "" {
+		return wc.Session{}, fmt.Errorf("%w: topic is required", wc.ErrInvalidParams)
+	}
 	list, err := c.Sessions(ctx)
 	if err != nil {
 		return wc.Session{}, err

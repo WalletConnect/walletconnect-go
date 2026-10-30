@@ -68,13 +68,12 @@ func registerAPI(srv *server.Server, c *wc.Client) {
 		if err != nil {
 			return nil, err
 		}
-		params := wc.ConnectParams{}
-		if len(in.Chains) > 0 {
-			params.OptionalNamespaces = map[string]wc.ProposalNamespace{
-				"eip155": {Chains: in.Chains, Methods: in.Methods, Events: in.Events},
-			}
+		if len(in.Chains) == 0 {
+			return nil, fmt.Errorf("%w: pick at least one chain", wc.ErrInvalidParams)
 		}
-		conn, err := c.Connect(r.Context(), params)
+		conn, err := c.Connect(r.Context(), wc.ConnectParams{OptionalNamespaces: map[string]wc.ProposalNamespace{
+			"eip155": {Chains: in.Chains, Methods: in.Methods, Events: in.Events},
+		}})
 		if err != nil {
 			return nil, err
 		}
@@ -138,6 +137,9 @@ func registerAPI(srv *server.Server, c *wc.Client) {
 		if err != nil {
 			return nil, err
 		}
+		if _, err := findSession(r.Context(), c, in.Topic); err != nil {
+			return nil, err
+		}
 		srv.Async("ping_result", map[string]any{"topic": in.Topic}, func() (any, error) {
 			start := time.Now()
 			if err := c.Ping(bg, in.Topic); err != nil {
@@ -175,6 +177,9 @@ func registerAPI(srv *server.Server, c *wc.Client) {
 }
 
 func findSession(ctx context.Context, c *wc.Client, topic string) (wc.Session, error) {
+	if topic == "" {
+		return wc.Session{}, fmt.Errorf("%w: topic is required", wc.ErrInvalidParams)
+	}
 	sessions, err := c.Sessions(ctx)
 	if err != nil {
 		return wc.Session{}, err
