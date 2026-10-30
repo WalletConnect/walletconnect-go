@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"encoding/json"
@@ -10,8 +11,11 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	wc "github.com/WalletConnect/walletconnect-go"
+	"github.com/WalletConnect/walletconnect-go/tracefile"
 )
 
 //go:embed assets
@@ -46,6 +50,29 @@ func (s *Server) Handle(pattern string, fn func(r *http.Request) (any, error)) {
 			out = map[string]string{"error": err.Error()}
 		}
 		_ = json.NewEncoder(w).Encode(out)
+	})
+}
+
+// ServeTrace serves the trace file at path, with its rotated history before
+// it, as one JSON-lines download at /api/trace.
+func (s *Server) ServeTrace(path string) {
+	s.mux.HandleFunc("GET /api/trace", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+filepath.Base(path)+`"`)
+		for _, p := range tracefile.Files(path) {
+			b, err := os.ReadFile(p)
+			if err != nil {
+				if !errors.Is(err, os.ErrNotExist) {
+					s.log.Warn("read trace file", "path", p, "err", err)
+				}
+				continue
+			}
+			// The client may be writing the last line.
+			b = b[:bytes.LastIndexByte(b, '\n')+1]
+			if _, err := w.Write(b); err != nil {
+				return
+			}
+		}
 	})
 }
 

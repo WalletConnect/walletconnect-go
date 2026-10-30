@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	wc "github.com/WalletConnect/walletconnect-go"
@@ -26,10 +27,11 @@ type Config struct {
 
 // App is a running SDK client with its storage.
 type App struct {
-	Client *wc.Client
-	DB     *storage.Bolt
-	Log    *slog.Logger
-	Ctx    context.Context
+	Client    *wc.Client
+	DB        *storage.Bolt
+	Log       *slog.Logger
+	Ctx       context.Context
+	TraceFile string
 }
 
 // Start opens the Bolt store in DataDir and starts an SDK client on it.
@@ -47,13 +49,15 @@ func Start(cfg Config) (*App, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	traceFile := filepath.Join(cfg.DataDir, "walletconnect.trace.jsonl")
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	client, err := wc.New(ctx, wc.Options{
 		ProjectID: os.Getenv("WC_PROJECT_ID"),
 		RelayURL:  cfg.RelayURL,
 		Storage:   db,
 		Logger:    log,
 		Trace:     cfg.Debug,
+		TraceFile: traceFile,
 		Metadata:  cfg.Metadata,
 	})
 	if err != nil {
@@ -66,7 +70,7 @@ func Start(cfg Config) (*App, func(), error) {
 		db.Close()
 		stop()
 	}
-	return &App{Client: client, DB: db, Log: log, Ctx: ctx}, closeAll, nil
+	return &App{Client: client, DB: db, Log: log, Ctx: ctx, TraceFile: traceFile}, closeAll, nil
 }
 
 // Serve runs the HTTP server until the app context ends.
