@@ -2,7 +2,7 @@
 
 A Go SDK for the [WalletConnect Sign v2](https://specs.walletconnect.com/2.0/specs/clients/sign/) protocol. One client can act as a **dApp**, proposing sessions and sending requests, and as a **wallet**, approving sessions and answering them. It interoperates with the JS SDK (`@walletconnect/sign-client`) over the production relay.
 
-Status: `v0.1.0`, experimental. The API may change before `v1`.
+Status: `v1.0.0`. The API follows [semantic versioning](https://semver.org): no breaking changes before `v2`. API reference: [pkg.go.dev](https://pkg.go.dev/github.com/WalletConnect/walletconnect-go).
 
 ```sh
 go get github.com/WalletConnect/walletconnect-go
@@ -272,3 +272,11 @@ TEST_PROJECT_ID=... go run ./interop/bench -n 30
 | `internal/namespaces` | CAIP-2/10 parsing, namespace validation and conformance |
 | `internal/crypto`, `relayauth`, `uri`, `jsonrpc`, `sdkerr`, `queue` | Protocol building blocks |
 | `interop/` | JS interop tests and vector generator |
+
+## Security
+
+Report vulnerabilities privately, as described in [SECURITY.md](SECURITY.md), not in public issues.
+
+## License
+
+[WalletConnect Community License](LICENSE.md).

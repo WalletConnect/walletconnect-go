@@ -15,9 +15,13 @@ type hub struct {
 	mu        sync.Mutex
 	subs      map[chan []byte]struct{}
 	lastRelay []byte
+	// maxAge ends each stream, and the page reopens it. Cloud Run does not
+	// tell the server when a page closes, so an endless stream would hold
+	// its request slot until the request timeout.
+	maxAge time.Duration
 }
 
-func newHub() *hub { return &hub{subs: map[chan []byte]struct{}{}} }
+func newHub() *hub { return &hub{subs: map[chan []byte]struct{}{}, maxAge: 5 * time.Minute} }
 
 func (h *hub) publish(kind string, data any) {
 	b, err := json.Marshal(map[string]any{"type": kind, "data": data, "at": time.Now().UnixMilli()})
@@ -60,7 +64,9 @@ func (h *hub) serve(w http.ResponseWriter, r *http.Request) {
 
 	keepalive := time.NewTicker(15 * time.Second)
 	defer keepalive.Stop()
-	fmt.Fprint(w, ": connected\n\n")
+	expire := time.NewTimer(h.maxAge)
+	defer expire.Stop()
+	fmt.Fprint(w, "retry: 1000\n: connected\n\n")
 	flusher.Flush()
 	for {
 		select {
@@ -70,6 +76,8 @@ func (h *hub) serve(w http.ResponseWriter, r *http.Request) {
 		case <-keepalive.C:
 			fmt.Fprint(w, ": keepalive\n\n")
 			flusher.Flush()
+		case <-expire.C:
+			return
 		case <-r.Context().Done():
 			return
 		}

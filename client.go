@@ -1,10 +1,3 @@
-// Package walletconnect is a Go SDK for the WalletConnect Sign v2 protocol.
-// One Client can act as a dApp, proposing sessions and sending requests, and
-// as a wallet, approving sessions and answering requests.
-//
-// All state lives in the Storage passed in Options, so a client restarted on
-// the same storage resumes its sessions.
-
 package walletconnect
 
 import (
@@ -33,11 +26,12 @@ import (
 )
 
 // Version is the SDK version reported to the relay.
-const Version = "0.1.0"
+const Version = "1.0.0"
 
 // DefaultRelayURL is the production relay.
 const DefaultRelayURL = "wss://relay.walletconnect.org"
 
+// Options configure a Client. Only ProjectID is required.
 type Options struct {
 	// ProjectID from the WalletConnect dashboard. Required.
 	ProjectID string
@@ -79,8 +73,7 @@ type Options struct {
 	// duration with the parts spent on the relay, waiting for a relay
 	// connection and waiting for the peer and, if it failed, the error's
 	// type. No params, payloads, keys, addresses or error messages are
-	// sent. Events are sent in
-	// batches every 30 seconds and on Close, with Metadata.URL's origin as
+	// sent. Events are sent in batches every 30 seconds and on Close, with Metadata.URL's origin as
 	// the Origin header; Pulse accepts only the project's allowed domains,
 	// and without a Metadata.URL nothing is reported. Test binaries never
 	// report.
@@ -90,6 +83,8 @@ type Options struct {
 	pulseURL string           // test hook: report to this URL, even in tests
 }
 
+// Client is one WalletConnect client, acting as a dApp, a wallet or both.
+// Its methods are safe for concurrent use. Close stops it.
 type Client struct {
 	tracer    *trace.Tracer
 	traceFile *tracefile.Writer // nil when off

@@ -17,7 +17,7 @@ import (
 const testJWT = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJkaWQ6a2V5OnoifQ.c2lnbmF0dXJlLXNpZ25hdHVyZS1zaWduYXR1cmU"
 
 func TestRedactDial(t *testing.T) {
-	dialURL := "wss://relay.walletconnect.org/?auth=" + testJWT + "&projectId=0123456789abcdef0123456789abcdef&ua=wc-2%2Fgo-0.1.0%2Flinux%2Fserver"
+	dialURL := "wss://relay.walletconnect.org/?auth=" + testJWT + "&projectId=0123456789abcdef0123456789abcdef&ua=wc-2%2Fgo-1.0.0%2Flinux%2Fserver"
 	// coder/websocket dials over https and wraps the http client's error,
 	// which quotes the request URL.
 	inner := &url.Error{Op: "Get", URL: strings.Replace(dialURL, "wss://", "https://", 1), Err: errors.New("dial tcp 127.0.0.1:443: connection refused")}

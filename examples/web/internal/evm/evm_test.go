@@ -1,6 +1,7 @@
 package evm
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -24,8 +25,12 @@ func TestSignAndRecover(t *testing.T) {
 			t.Fatalf("%s: recovered %s, %v; want %s", method, got.Hex(), err, s.Address.Hex())
 		}
 	}
-	if _, err := s.Sign("eth_sendTransaction", []byte(`[{}]`)); err == nil {
-		t.Fatal("eth_sendTransaction should be unsupported")
+	params, err := RequestParams("eth_sendTransaction", s.Address.Hex(), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Sign("eth_sendTransaction", params); !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("eth_sendTransaction: %v, want ErrUnsupported", err)
 	}
 }
 

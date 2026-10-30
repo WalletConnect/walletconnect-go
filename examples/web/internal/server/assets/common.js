@@ -164,16 +164,28 @@ export async function api(path, body) {
   return data;
 }
 
-// onEvents calls handler(type, data) for each server event.
+// onEvents calls handler(type, data) for each server event, and
+// handler("reconnected") when the stream reopens, having missed events.
 export function onEvents(handler) {
   const source = new EventSource("/api/events");
+  let opened = false, down;
+  source.onopen = () => {
+    clearTimeout(down);
+    if (opened) handler("reconnected");
+    opened = true;
+  };
   source.onmessage = (msg) => {
     const ev = JSON.parse(msg.data);
     if (ev.type === "relay_state") setRelay(ev.data.connected, ev.data.error);
     else log(ev.type, ev.data);
     handler(ev.type, ev.data);
   };
-  source.onerror = () => setRelay(false, "server unreachable");
+  // The server ends each stream every few minutes and the browser reopens it
+  // within a second, so only a stream that stays down is reported.
+  source.onerror = () => {
+    clearTimeout(down);
+    down = setTimeout(() => setRelay(false, "server unreachable"), 3000);
+  };
 }
 
 export function setRelay(connected, error) {

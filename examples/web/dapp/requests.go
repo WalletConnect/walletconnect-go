@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"sync"
 	"time"
 )
@@ -20,7 +21,7 @@ type requestEntry struct {
 }
 
 // requestLog keeps the latest requests per session in memory, so a reloaded
-// page still shows them.
+// page still shows them. Pending requests are always kept.
 type requestLog struct {
 	mu      sync.Mutex
 	next    int64
@@ -38,8 +39,11 @@ func (l *requestLog) start(topic, method, chainID, account string) requestEntry 
 	l.next++
 	e := &requestEntry{LocalID: l.next, Topic: topic, Method: method, ChainID: chainID, Account: account, At: time.Now().Unix(), Pending: true}
 	list := append([]*requestEntry{e}, l.byTopic[topic]...)
-	if len(list) > requestsPerSession {
-		list = list[:requestsPerSession]
+	// Drop the oldest answered entries; a pending one waits for its answer.
+	for i := len(list) - 1; i >= 0 && len(list) > requestsPerSession; i-- {
+		if !list[i].Pending {
+			list = slices.Delete(list, i, i+1)
+		}
 	}
 	l.byTopic[topic] = list
 	return *e

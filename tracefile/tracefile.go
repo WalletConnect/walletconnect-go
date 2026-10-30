@@ -45,6 +45,7 @@ func (s *Span) Attr(key string) string { return attrString(s.Attributes, key) }
 // Kind is the OTLP span kind.
 type Kind int
 
+// Span kinds.
 const (
 	KindUnspecified Kind = iota
 	KindInternal
@@ -86,6 +87,7 @@ type Status struct {
 // StatusCode is the OTLP status code.
 type StatusCode int
 
+// Status codes.
 const (
 	StatusUnset StatusCode = iota
 	StatusOK
@@ -104,6 +106,7 @@ type Options struct {
 }
 
 const (
+	// DefaultLimit is Options.Limit when unset.
 	DefaultLimit = 30 << 20
 	keep         = 3 // files on disk: the current one and two rotated
 	scopeName    = "github.com/WalletConnect/walletconnect-go"

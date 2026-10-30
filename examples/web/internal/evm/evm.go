@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -24,6 +25,9 @@ var SignedMethods = []string{"personal_sign", "eth_sign", "eth_signTypedData", "
 // digest returns the hash a wallet signs for method and the address the
 // request names.
 func digest(method string, params json.RawMessage) (common.Hash, common.Address, error) {
+	if !slices.Contains(SignedMethods, method) {
+		return common.Hash{}, common.Address{}, ErrUnsupported
+	}
 	var args []json.RawMessage
 	if err := json.Unmarshal(params, &args); err != nil || len(args) < 2 {
 		return common.Hash{}, common.Address{}, fmt.Errorf("%s: params must be a two-item array", method)
